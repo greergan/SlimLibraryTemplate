@@ -1,0 +1,22 @@
+# build
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+*.deb
+*.rpm
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# binaries
+*.exe
+*.out
+*.o
+*.obj
