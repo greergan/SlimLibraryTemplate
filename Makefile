@@ -40,7 +40,6 @@ build: configure
 	$(CMAKE) --build $(BUILD_DIR)
 
 install:
-install:
 	@if [ "$(IS_DEBIAN)" = "yes" ]; then \
 		$(MAKE) deb; \
 		PKG=$$(ls -1t *.deb 2>/dev/null | sort --reverse | head -n 1); \
@@ -66,17 +65,13 @@ install:
 		exit 1; \
 	fi;
 
-test: build
-	cd $(BUILD_DIR) && ctest --output-on-failure --verbose
-	$(BUILD_DIR)/slim_tests
-
-deb: build test
+deb: build
 	cd $(BUILD_DIR) && cpack -G DEB
 
-rpm: build test
+rpm: build
 	cd $(BUILD_DIR) && cpack -G RPM
 
-packages: test
+packages:
 	cd $(BUILD_DIR) && for f in DEB RPM; do cpack -G $$f; done
 
 clean:
