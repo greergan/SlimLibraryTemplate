@@ -155,6 +155,7 @@ fi
 HEADER_PATH="${HEADER_DIR}/${HEADER_FILE}"
 if [[ ! -e "${HEADER_PATH}" ]]; then
     cat > "${HEADER_PATH}" << EOF
+#pragma once
 #ifndef ${HEADER_GUARD}
 #define ${HEADER_GUARD}
 
