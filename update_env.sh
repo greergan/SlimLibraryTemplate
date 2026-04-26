@@ -133,6 +133,16 @@ for tu in main.cpp test.cpp; do
     fi
 done
 
+# Build header guard from directory name words
+ALL_WORDS=("Slim" "${WORDS[@]}")
+EXTENSION="${HEADER_FILE##*.}"
+GUARD_PARTS=()
+for word in "${ALL_WORDS[@]}"; do
+    GUARD_PARTS+=("$(echo "${word}" | tr '[:lower:]' '[:upper:]')")
+done
+GUARD_PARTS+=("$(echo "${EXTENSION}" | tr '[:lower:]' '[:upper:]')")
+HEADER_GUARD="$(IFS='__'; echo "${GUARD_PARTS[*]}")"
+
 # Create include/slim header file
 echo ""
 if [[ ! -d "${HEADER_DIR}" ]]; then
@@ -144,7 +154,12 @@ fi
 
 HEADER_PATH="${HEADER_DIR}/${HEADER_FILE}"
 if [[ ! -e "${HEADER_PATH}" ]]; then
-    touch "${HEADER_PATH}"
+    cat > "${HEADER_PATH}" << EOF
+#ifndef ${HEADER_GUARD}
+#define ${HEADER_GUARD}
+
+#endif // ${HEADER_GUARD}
+EOF
     echo -e "  ${GREEN}Created:${NC} ${HEADER_PATH#${DEST_DIR}/}"
 else
     echo -e "  ${RED}Skipped:${NC} ${HEADER_PATH#${DEST_DIR}/} (already exists)"
