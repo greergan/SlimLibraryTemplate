@@ -47,6 +47,13 @@ else
     exit 1
 fi
 
+# Determine pc.in filename based on word count
+if [[ ${WORD_COUNT} -eq 1 ]]; then
+    PC_FILE="slim_header.pc.in"
+else
+    PC_FILE="slim_common_lib.pc.in"
+fi
+
 download_file() {
     local relative_path="$1"
     local dest="${DEST_DIR}/${relative_path}"
@@ -83,7 +90,7 @@ echo ""
 
 # Check if any downloadable files already exist
 EXISTING_FILES=()
-for f in CMakeLists.txt Makefile; do
+for f in CMakeLists.txt Makefile "${PC_FILE}"; do
     [[ -e "${DEST_DIR}/${f}" ]] && EXISTING_FILES+=("${f}")
 done
 
@@ -102,7 +109,7 @@ if [[ ${#EXISTING_FILES[@]} -gt 0 ]]; then
 fi
 
 # Download top-level files
-for file in CMakeLists.txt Makefile; do
+for file in CMakeLists.txt Makefile "${PC_FILE}"; do
     download_file "${file}"
 done
 
