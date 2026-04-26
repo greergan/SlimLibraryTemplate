@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../SlimLibraryTemplate/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(LoadSlimSetup)
 include(LoadSlimPackages)
 project(${SLIM_LIB} VERSION ${GIT_TAG} LANGUAGES CXX)
