@@ -198,7 +198,175 @@ EOF
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# Parse required_packages and derive sorted include lines
+# Format per line: # PackageName [minVersion [maxVersion]]
+# Only Slim* packages (excluding SlimCommon itself) generate includes.
+# Non-Slim packages are skipped for now; they go in OTHER_INCLUDES if needed.
+# ---------------------------------------------------------------------------
+declare -a SLIM_INCLUDES=()
+declare -a OTHER_INCLUDES=()
+
+derive_slim_include() {
+    local pkg_name="$1"
+    local after="${pkg_name#Slim}"
+
+    # Skip bare "Slim" or "SlimCommon"
+    if [[ -z "${after}" || "${pkg_name}" == "SlimCommon" ]]; then
+        return
+    fi
+
+    # Split CamelCase into words
+    local pkg_words
+    pkg_words=($(echo "${after}" | sed 's/\([A-Z]\)/ \1/g' | xargs -n1))
+    local pkg_count=${#pkg_words[@]}
+
+    local inc_path
+    if [[ ${pkg_count} -eq 1 ]]; then
+        inc_path="slim/${pkg_name}.hpp"
+    elif [[ ${pkg_count} -eq 2 ]]; then
+        local d1 b
+        d1="$(echo "${pkg_words[0]}" | tr '[:upper:]' '[:lower:]')"
+        b="$(echo "${pkg_words[1]}" | tr '[:upper:]' '[:lower:]')"
+        inc_path="slim/${d1}/${b}.h"
+    elif [[ ${pkg_count} -eq 3 ]]; then
+        local d1 d2 b
+        d1="$(echo "${pkg_words[0]}" | tr '[:upper:]' '[:lower:]')"
+        d2="$(echo "${pkg_words[1]}" | tr '[:upper:]' '[:lower:]')"
+        b="$(echo "${pkg_words[2]}" | tr '[:upper:]' '[:lower:]')"
+        inc_path="slim/${d1}/${d2}/${b}.h"
+    else
+        return
+    fi
+
+    echo "#include <${inc_path}>"
+}
+
+if [[ -f "${DEST_DIR}/required_packages" ]]; then
+    echo ""
+    echo "Processing required_packages..."
+    echo ""
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        # Skip blank lines and comment-only lines (e.g. the format header)
+        [[ -z "${line}" || "${line}" == \#* ]] && continue
+
+        # Extract package name (first whitespace-delimited token)
+        pkg_name="${line%% *}"
+        [[ -z "${pkg_name}" ]] && continue
+
+        if [[ "${pkg_name}" == Slim* ]]; then
+            inc="$(derive_slim_include "${pkg_name}")"
+            if [[ -n "${inc}" ]]; then
+                SLIM_INCLUDES+=("${inc}")
+                echo -e "  ${GREEN}Resolved:${NC} ${pkg_name} → ${inc}"
+            else
+                echo -e "  ${YELLOW}Skipped:${NC} ${pkg_name} (no include derived)"
+            fi
+        else
+            echo -e "  ${YELLOW}Skipped:${NC} ${pkg_name} (non-Slim package)"
+        fi
+        # Non-Slim packages: currently skipped; add to OTHER_INCLUDES here if needed
+    done < "${DEST_DIR}/required_packages"
+fi
+
+# Sort each group alphabetically
+IFS=$'\n' SLIM_INCLUDES=($(sort <<< "${SLIM_INCLUDES[*]}")); unset IFS
+IFS=$'\n' OTHER_INCLUDES=($(sort <<< "${OTHER_INCLUDES[*]}")); unset IFS
+
+# Build the full include block: non-Slim first, then Slim (blank line between groups)
+build_include_block() {
+    local block=""
+    if [[ ${#OTHER_INCLUDES[@]} -gt 0 ]]; then
+        for inc in "${OTHER_INCLUDES[@]}"; do
+            block+="${inc}"$'\n'
+        done
+    fi
+    if [[ ${#SLIM_INCLUDES[@]} -gt 0 ]]; then
+        [[ -n "${block}" ]] && block+=$'\n'
+        for inc in "${SLIM_INCLUDES[@]}"; do
+            block+="${inc}"$'\n'
+        done
+    fi
+    printf '%s' "${block}"
+}
+
+INCLUDE_BLOCK="$(build_include_block)"
+
+# Inject includes into a TU file.
+#   - Collects all existing #include lines from the file (if any)
+#   - Merges them with the generated SLIM_INCLUDES and OTHER_INCLUDES
+#   - Deduplicates, then sorts: non-Slim first (alphabetical), Slim second (alphabetical)
+#   - Replaces the existing #include block (or prepends for new files)
+inject_includes() {
+    local filepath="$1"
+    local is_new="$2"
+
+    # Collect existing #include lines from the file (empty array for new files)
+    local -a existing_includes=()
+    if [[ "${is_new}" == "existing" ]]; then
+        while IFS= read -r inc_line; do
+            existing_includes+=("${inc_line}")
+        done < <(grep '^#include ' "${filepath}")
+    fi
+
+    # Merge generated + existing, deduplicate
+    local -a all_slim=()
+    local -a all_other=()
+
+    # Helper: classify and insert one #include line into the right bucket
+    classify_include() {
+        local inc="$1"
+        # Slim includes match: #include <slim/...>
+        if [[ "${inc}" =~ ^\#include\ \<slim/ ]]; then
+            all_slim+=("${inc}")
+        else
+            all_other+=("${inc}")
+        fi
+    }
+
+    for inc in "${OTHER_INCLUDES[@]}"; do classify_include "${inc}"; done
+    for inc in "${SLIM_INCLUDES[@]}";  do classify_include "${inc}"; done
+    for inc in "${existing_includes[@]}"; do classify_include "${inc}"; done
+
+    # Deduplicate each bucket (preserve only unique entries)
+    IFS=$'\n' all_slim=($(  printf '%s\n' "${all_slim[@]}"  | sort -u)); unset IFS
+    IFS=$'\n' all_other=($(  printf '%s\n' "${all_other[@]}" | sort -u)); unset IFS
+
+    # Build the merged, sorted include block
+    local merged_block=""
+    if [[ ${#all_other[@]} -gt 0 ]]; then
+        for inc in "${all_other[@]}"; do
+            merged_block+="${inc}"$'\n'
+        done
+    fi
+    if [[ ${#all_slim[@]} -gt 0 ]]; then
+        [[ -n "${merged_block}" ]] && merged_block+=$'\n'
+        for inc in "${all_slim[@]}"; do
+            merged_block+="${inc}"$'\n'
+        done
+    fi
+
+    # Nothing to write
+    if [[ -z "${merged_block}" ]]; then
+        return
+    fi
+
+    if [[ "${is_new}" == "new" ]]; then
+        local existing_body
+        existing_body="$(cat "${filepath}")"
+        printf '%s\n%s' "${merged_block}" "${existing_body}" > "${filepath}"
+    else
+        # Strip existing #include lines, collapse leading blank lines,
+        # then prepend the merged sorted block
+        local remainder
+        remainder="$(grep -v '^#include ' "${filepath}" | sed '/./,$!d')"
+        printf '%s\n%s\n' "${merged_block}" "${remainder}" > "${filepath}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Create src directory and TU files
+# ---------------------------------------------------------------------------
 echo ""
 if [[ ! -d "${DEST_DIR}/src" ]]; then
     mkdir -p "${DEST_DIR}/src"
@@ -210,35 +378,24 @@ fi
 for tu in main.cpp test.cpp; do
     tu_path="${DEST_DIR}/src/${tu}"
     if [[ ! -e "${tu_path}" ]]; then
+        # Build the base content first, then inject includes
         if [[ "${tu}" == "test.cpp" ]]; then
-            if [[ -n "${INCLUDE_PATH}" ]]; then
             cat > "${tu_path}" << EOF
-#include <${INCLUDE_PATH}>
 
 int main() {
 
     return 0;
 }
 EOF
-            else
-            cat > "${tu_path}" << EOF
-int main() {
-
-    return 0;
-}
-EOF
-            fi
-
         else
-            if [[ -n "${INCLUDE_PATH}" ]]; then
-                echo "#include <${INCLUDE_PATH}>" > "${tu_path}"
-            else
-                touch "${tu_path}"
-            fi
+            # main.cpp starts empty so inject_includes prepends cleanly
+            printf '\n' > "${tu_path}"
         fi
+        inject_includes "${tu_path}" "new"
         echo -e "  ${GREEN}Created:${NC} src/${tu}"
     else
-        echo -e "  ${RED}Skipped:${NC} src/${tu} (already exists)"
+        inject_includes "${tu_path}" "existing"
+        echo -e "  ${GREEN}Updated:${NC} src/${tu} (includes replaced)"
     fi
 done
 
