@@ -82,6 +82,25 @@ else
     done <<< "${cmake_files}"
 fi
 
+# Create src directory and empty TU files if not already present
+echo ""
+if [[ ! -d "${DEST_DIR}/src" ]]; then
+    mkdir -p "${DEST_DIR}/src"
+    echo -e "  ${GREEN}Created:${NC} src/"
+else
+    echo -e "  ${RED}Skipped:${NC} src/ (already exists)"
+fi
+
+for tu in main.cpp test.cpp; do
+    tu_path="${DEST_DIR}/src/${tu}"
+    if [[ ! -e "${tu_path}" ]]; then
+        touch "${tu_path}"
+        echo -e "  ${GREEN}Created:${NC} src/${tu}"
+    else
+        echo -e "  ${RED}Skipped:${NC} src/${tu} (already exists)"
+    fi
+done
+
 echo ""
 echo -e "${GREEN}Done.${NC}"
 echo ""
