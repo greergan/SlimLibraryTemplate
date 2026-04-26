@@ -49,7 +49,7 @@ fi
 
 # Determine pc.in filename based on word count
 if [[ ${WORD_COUNT} -eq 1 ]]; then
-    PC_FILE="slim_header.pc.in"
+    PC_FILE="slim_header_lib.pc.in"
 else
     PC_FILE="slim_common_lib.pc.in"
 fi
