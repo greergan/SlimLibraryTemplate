@@ -54,11 +54,18 @@ download_file() {
     dest_dir="$(dirname "${dest}")"
 
     if [[ -e "${dest}" ]]; then
-        echo -en "${YELLOW}File '${relative_path}' already exists. Overwrite? [y/N]: ${NC}"
-        read -r answer < /dev/tty
-        if [[ ! "${answer}" =~ ^[Yy]$ ]]; then
-            echo -e "  ${YELLOW}Skipped:${NC} ${relative_path}"
+        if [[ "${SKIP_ALL}" == "true" ]]; then
+            echo -e "  ${RED}Skipped:${NC} ${relative_path}"
             return
+        elif [[ "${OVERWRITE_ALL}" == "true" ]]; then
+            : # fall through to download
+        else
+            echo -en "${YELLOW}File '${relative_path}' already exists. Overwrite? [y/N]: ${NC}"
+            read -r answer < /dev/tty
+            if [[ ! "${answer}" =~ ^[Yy]$ ]]; then
+                echo -e "  ${YELLOW}Skipped:${NC} ${relative_path}"
+                return
+            fi
         fi
     fi
 
@@ -73,6 +80,26 @@ download_file() {
 echo ""
 echo "Updating Slim library environment in: ${DEST_DIR}"
 echo ""
+
+# Check if any downloadable files already exist
+EXISTING_FILES=()
+for f in CMakeLists.txt Makefile; do
+    [[ -e "${DEST_DIR}/${f}" ]] && EXISTING_FILES+=("${f}")
+done
+
+SKIP_ALL="false"
+OVERWRITE_ALL="false"
+
+if [[ ${#EXISTING_FILES[@]} -gt 0 ]]; then
+    echo -en "${YELLOW}Some files already exist. Skip all existing files? [y/N]: ${NC}"
+    read -r top_answer < /dev/tty
+    if [[ "${top_answer}" =~ ^[Yy]$ ]]; then
+        SKIP_ALL="true"
+    else
+        OVERWRITE_ALL="true"
+    fi
+    echo ""
+fi
 
 # Download top-level files
 for file in CMakeLists.txt Makefile; do
