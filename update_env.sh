@@ -52,7 +52,7 @@ download_file() {
 
     if [[ -e "${dest}" ]]; then
         echo -en "${YELLOW}File '${relative_path}' already exists. Overwrite? [y/N]: ${NC}"
-        read -r answer
+        read -r answer < /dev/tty
         if [[ ! "${answer}" =~ ^[Yy]$ ]]; then
             echo -e "  ${YELLOW}Skipped:${NC} ${relative_path}"
             return
