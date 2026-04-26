@@ -90,7 +90,7 @@ echo ""
 
 # Check if any downloadable files already exist
 EXISTING_FILES=()
-for f in CMakeLists.txt Makefile "${PC_FILE}"; do
+for f in CMakeLists.txt Makefile LICENSE "${PC_FILE}"; do
     [[ -e "${DEST_DIR}/${f}" ]] && EXISTING_FILES+=("${f}")
 done
 
@@ -109,7 +109,7 @@ if [[ ${#EXISTING_FILES[@]} -gt 0 ]]; then
 fi
 
 # Download top-level files
-for file in CMakeLists.txt Makefile "${PC_FILE}"; do
+for file in CMakeLists.txt Makefile LICENSE "${PC_FILE}"; do
     download_file "${file}"
 done
 
