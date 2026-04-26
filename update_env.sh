@@ -470,7 +470,7 @@ EOF
     git -C "${DEST_DIR}" push -u origin HEAD
     echo -e "  ${GREEN}Pushed:${NC} initial commit to ${remote_url}"
 else
-    echo -e "  ${YELLOW}Skipped:${NC} git repository already exists"
+    echo -e "  ${RED}Skipped:${NC} git repository already exists"
 fi
 
 echo ""
