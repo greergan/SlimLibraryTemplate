@@ -117,14 +117,14 @@ fi
 # Build header guard from directory name words
 ALL_WORDS=("Slim" "${WORDS[@]}")
 EXTENSION="${HEADER_FILE##*.}"
-GUARD_PARTS=()
+HEADER_GUARD=""
 for word in "${ALL_WORDS[@]}"; do
-    GUARD_PARTS+=("$(echo "${word}" | tr '[:lower:]' '[:upper:]')")
+    [[ -n "${HEADER_GUARD}" ]] && HEADER_GUARD="${HEADER_GUARD}__"
+    HEADER_GUARD="${HEADER_GUARD}$(echo "${word}" | tr '[:lower:]' '[:upper:]')"
 done
-GUARD_PARTS+=("$(echo "${EXTENSION}" | tr '[:lower:]' '[:upper:]')")
-HEADER_GUARD="$(IFS='__'; echo "${GUARD_PARTS[*]}")"
+HEADER_GUARD="${HEADER_GUARD}__$(echo "${EXTENSION}" | tr '[:lower:]' '[:upper:]')"
 HEADER_PATH="${HEADER_DIR}/${HEADER_FILE}"
-INCLUDE_PATH="${HEADER_PATH#${DEST_DIR}/include/}"
+INCLUDE_PATH="slim/${HEADER_PATH#${DEST_DIR}/include/slim/}"
 
 # Create include/slim header file
 echo ""
