@@ -163,34 +163,39 @@ for word in "${ALL_WORDS[@]}"; do
 done
 HEADER_GUARD="${HEADER_GUARD}__$(echo "${EXTENSION}" | tr '[:lower:]' '[:upper:]')"
 HEADER_PATH="${HEADER_DIR}/${HEADER_FILE}"
-if [[ ${WORD_COUNT} -eq 1 ]]; then
-    INCLUDE_PATH="slim/${INCLUDE_FILE}"
-elif [[ ${WORD_COUNT} -eq 2 ]]; then
-    INCLUDE_PATH="slim/${SUBDIR}/${INCLUDE_FILE}"
-elif [[ ${WORD_COUNT} -eq 3 ]]; then
-    INCLUDE_PATH="slim/${SUBDIR}/${SUBDIR2}/${INCLUDE_FILE}"
+
+if [[ ${DIR_NAME} -ne "SlimCommon" ]]; then
+    if [[ ${WORD_COUNT} -eq 1 ]]; then
+        INCLUDE_PATH="slim/${INCLUDE_FILE}"
+    elif [[ ${WORD_COUNT} -eq 2 ]]; then
+        INCLUDE_PATH="slim/${SUBDIR}/${INCLUDE_FILE}"
+    elif [[ ${WORD_COUNT} -eq 3 ]]; then
+        INCLUDE_PATH="slim/${SUBDIR}/${SUBDIR2}/${INCLUDE_FILE}"
+    fi
 fi
 
 # Create include/slim header file
 echo ""
-if [[ ! -d "${HEADER_DIR}" ]]; then
-    mkdir -p "${HEADER_DIR}"
-    echo -e "  ${GREEN}Created:${NC} ${HEADER_DIR#${DEST_DIR}/}/"
-else
-    echo -e "  ${RED}Skipped:${NC} ${HEADER_DIR#${DEST_DIR}/}/ (already exists)"
-fi
+if [[ -n "${INCLUDE_PATH}" ]]; then
+    if [[ ! -d "${HEADER_DIR}" ]]; then
+        mkdir -p "${HEADER_DIR}"
+        echo -e "  ${GREEN}Created:${NC} ${HEADER_DIR#${DEST_DIR}/}/"
+    else
+        echo -e "  ${RED}Skipped:${NC} ${HEADER_DIR#${DEST_DIR}/}/ (already exists)"
+    fi
 
-if [[ ! -e "${HEADER_PATH}" ]]; then
-    cat > "${HEADER_PATH}" << EOF
+    if [[ ! -e "${HEADER_PATH}" ]]; then
+        cat > "${HEADER_PATH}" << EOF
 #pragma once
 #ifndef ${HEADER_GUARD}
 #define ${HEADER_GUARD}
 
 #endif // ${HEADER_GUARD}
 EOF
-    echo -e "  ${GREEN}Created:${NC} ${HEADER_PATH#${DEST_DIR}/}"
-else
-    echo -e "  ${RED}Skipped:${NC} ${HEADER_PATH#${DEST_DIR}/} (already exists)"
+        echo -e "  ${GREEN}Created:${NC} ${HEADER_PATH#${DEST_DIR}/}"
+    else
+        echo -e "  ${RED}Skipped:${NC} ${HEADER_PATH#${DEST_DIR}/} (already exists)"
+    fi
 fi
 
 # Create src directory and TU files
@@ -206,6 +211,7 @@ for tu in main.cpp test.cpp; do
     tu_path="${DEST_DIR}/src/${tu}"
     if [[ ! -e "${tu_path}" ]]; then
         if [[ "${tu}" == "test.cpp" ]]; then
+            if [[ -n "${INCLUDE_PATH}" ]]; then
             cat > "${tu_path}" << EOF
 #include <${INCLUDE_PATH}>
 
@@ -214,8 +220,21 @@ int main() {
     return 0;
 }
 EOF
+            else
+            cat > "${tu_path}" << EOF
+int main() {
+
+    return 0;
+}
+EOF
+            fi
+
         else
-            echo "#include <${INCLUDE_PATH}>" > "${tu_path}"
+            if [[ -n "${INCLUDE_PATH}" ]]; then
+                echo "#include <${INCLUDE_PATH}>" > "${tu_path}"
+            else
+                touch "${tu_path}"
+            fi
         fi
         echo -e "  ${GREEN}Created:${NC} src/${tu}"
     else
