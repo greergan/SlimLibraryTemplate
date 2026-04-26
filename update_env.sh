@@ -123,10 +123,11 @@ else
     echo -e "  ${RED}Skipped:${NC} src/ (already exists)"
 fi
 
+INCLUDE_PATH="${HEADER_PATH#${DEST_DIR}/include/}"
 for tu in main.cpp test.cpp; do
     tu_path="${DEST_DIR}/src/${tu}"
     if [[ ! -e "${tu_path}" ]]; then
-        touch "${tu_path}"
+        echo "#include <${INCLUDE_PATH}>" > "${tu_path}"
         echo -e "  ${GREEN}Created:${NC} src/${tu}"
     else
         echo -e "  ${RED}Skipped:${NC} src/${tu} (already exists)"
