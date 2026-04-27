@@ -240,8 +240,8 @@ function(define_module)
     if(ARGC EQUAL 0)
         cmake_path(GET CMAKE_SOURCE_DIR FILENAME NAME)
 
-        # register the primary module first
-        define_module("${NAME}")
+        # primary=ON is only ever set here via the 4th argument
+        define_module("${NAME}" "${_EMPTY_SENTINEL}" "${_EMPTY_SENTINEL}" ON)
         _propagate_module("${NAME}")
 
         _check_git_repo("${NAME}")
@@ -296,7 +296,12 @@ function(define_module)
         return()
     else()
         set(NAME "${ARGV0}")
+
+        # primary=ON only when explicitly passed as 4th argument from no-arg branch
         set(_primary OFF)
+        if(ARGC GREATER 3 AND "${ARGV3}" STREQUAL "ON")
+            set(_primary ON)
+        endif()
 
         set(_min_version "${_EMPTY_SENTINEL}")
         set(_max_version "${_EMPTY_SENTINEL}")
@@ -319,10 +324,6 @@ function(define_module)
 
     set(_metadata_file "${_lower}.pc")
     set(_git_repo      "${_SLIM_GIT_BASE}/${NAME}.git")
-
-    if("${_type}" STREQUAL "SlimCommon")
-        set(_primary ON)
-    endif()
 
     if("${_type}" STREQUAL "SlimLib")
         set(_hpp_only ON)
