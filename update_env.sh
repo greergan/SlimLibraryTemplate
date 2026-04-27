@@ -399,13 +399,14 @@ EOF
     fi
 done
 
-# Git repository setup
+# ---------------------------------------------------------------------------
+# .gitignore setup — runs before git init so the file exists for the initial
+# commit; if the repo already exists and the file is newly created, it gets
+# its own commit and push.
+# ---------------------------------------------------------------------------
 echo ""
-if [[ ! -d "${DEST_DIR}/.git" ]]; then
-    git -C "${DEST_DIR}" init
-    echo -e "  ${GREEN}Initialized:${NC} git repository"
-
-    # Create standard CMake .gitignore
+GITIGNORE_CREATED="false"
+if [[ ! -e "${DEST_DIR}/.gitignore" ]]; then
     cat > "${DEST_DIR}/.gitignore" << EOF
 # CMake
 CMakeLists.txt.user
@@ -421,6 +422,7 @@ CTestTestfile.cmake
 _deps/
 CMakeUserPresets.json
 build*/
+cmake
 
 # IDE
 .idea/
@@ -448,6 +450,16 @@ cmake/
 ${PC_FILE}
 EOF
     echo -e "  ${GREEN}Created:${NC} .gitignore"
+    GITIGNORE_CREATED="true"
+else
+    echo -e "  ${RED}Skipped:${NC} .gitignore (already exists)"
+fi
+
+# Git repository setup
+echo ""
+if [[ ! -d "${DEST_DIR}/.git" ]]; then
+    git -C "${DEST_DIR}" init
+    echo -e "  ${GREEN}Initialized:${NC} git repository"
 
     # Prompt for remote URL, retry until provided
     while true; do
@@ -462,7 +474,7 @@ EOF
     git -C "${DEST_DIR}" remote add origin "${remote_url}"
     echo -e "  ${GREEN}Remote added:${NC} ${remote_url}"
 
-    # Stage specific files and make initial commit
+    # Stage specific files and make initial commit (.gitignore already exists by this point)
     git -C "${DEST_DIR}" add src/ include/ "${PC_FILE}" required_packages .gitignore 2>/dev/null
     git -C "${DEST_DIR}" commit -m "Initial commit: scaffold ${DIR_NAME} library environment"
     echo -e "  ${GREEN}Committed:${NC} initial library scaffold"
@@ -471,6 +483,14 @@ EOF
     echo -e "  ${GREEN}Pushed:${NC} initial commit to ${remote_url}"
 else
     echo -e "  ${RED}Skipped:${NC} git repository already exists"
+
+    if [[ "${GITIGNORE_CREATED}" == "true" ]]; then
+        git -C "${DEST_DIR}" add .gitignore
+        git -C "${DEST_DIR}" commit -m "Add .gitignore"
+        echo -e "  ${GREEN}Committed:${NC} .gitignore"
+        git -C "${DEST_DIR}" push
+        echo -e "  ${GREEN}Pushed:${NC} .gitignore to remote"
+    fi
 fi
 
 echo ""
