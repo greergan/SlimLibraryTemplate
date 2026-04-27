@@ -183,7 +183,57 @@ function(_check_git_repo NAME)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _get_git_repo_latest_tag(<n>)  [internal]
+# _get_git_tag(<n>)  [internal] - only called for the primary module
+# ---------------------------------------------------------------------------
+function(_get_git_tag NAME)
+    if(SLIM_USE_LOCAL_SOURCE)
+        set(MODULE_${NAME}_git_tag  "0.0.0" PARENT_SCOPE)
+        set(MODULE_${NAME}_git_hash "none"  PARENT_SCOPE)
+        return()
+    endif()
+
+    meta_get(MODULE "${NAME}" git_repo _repo_url)
+
+    execute_process(
+        COMMAND git ls-remote --tags --sort=-v:refname "${_repo_url}"
+        OUTPUT_VARIABLE _tags_raw
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    string(REGEX MATCH "refs/tags/([^\^\\n]+)" _ "${_tags_raw}")
+    set(_tag "${CMAKE_MATCH_1}")
+
+    if("${_tag}" STREQUAL "")
+        set(_tag  "${_EMPTY_SENTINEL}")
+        set(_hash "${_EMPTY_SENTINEL}")
+    else()
+        # get the hash of the resolved tag from the remote
+        execute_process(
+            COMMAND git ls-remote "${_repo_url}" "refs/tags/${_tag}"
+            OUTPUT_VARIABLE _hash_raw
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+
+        # ls-remote output is "<hash>\trefs/tags/<tag>" — extract the hash
+        string(REGEX MATCH "^([a-f0-9]+)" _ "${_hash_raw}")
+        set(_hash "${CMAKE_MATCH_1}")
+
+        # shorten to 7 chars to match git rev-parse --short
+        string(SUBSTRING "${_hash}" 0 7 _hash)
+
+        if("${_hash}" STREQUAL "")
+            set(_hash "${_EMPTY_SENTINEL}")
+        endif()
+    endif()
+
+    set(MODULE_${NAME}_git_tag  "${_tag}"  PARENT_SCOPE)
+    set(MODULE_${NAME}_git_hash "${_hash}" PARENT_SCOPE)
+endfunction()
+
+# ---------------------------------------------------------------------------
+# _get_git_repo_latest_tag(<n>)  [internal] - called for auto-loaded modules
 # ---------------------------------------------------------------------------
 function(_get_git_repo_latest_tag NAME)
     meta_get(MODULE "${NAME}" git_repo_found _repo_found)
@@ -208,7 +258,6 @@ function(_get_git_repo_latest_tag NAME)
         ERROR_QUIET
     )
 
-    # extract the first tag name from refs/tags/<tag>
     string(REGEX MATCH "refs/tags/([^\n^]+)" _tag_match "${_tag_output}")
     set(_latest_tag "${CMAKE_MATCH_1}")
 
@@ -227,6 +276,8 @@ macro(_propagate_module NAME)
     set(MODULE_${NAME}_FIELDS         "${MODULE_${NAME}_FIELDS}"         PARENT_SCOPE)
     set(MODULE_${NAME}_git_repo_found "${MODULE_${NAME}_git_repo_found}" PARENT_SCOPE)
     set(MODULE_${NAME}_git_latest_tag "${MODULE_${NAME}_git_latest_tag}" PARENT_SCOPE)
+    set(MODULE_${NAME}_git_tag        "${MODULE_${NAME}_git_tag}"        PARENT_SCOPE)
+    set(MODULE_${NAME}_git_hash       "${MODULE_${NAME}_git_hash}"       PARENT_SCOPE)
     foreach(KEY IN LISTS MODULE_${NAME}_FIELDS)
         set(MODULE_${NAME}_${KEY}     "${MODULE_${NAME}_${KEY}}"         PARENT_SCOPE)
     endforeach()
@@ -247,8 +298,9 @@ function(define_module)
         _check_git_repo("${NAME}")
         set(MODULE_${NAME}_git_repo_found "${MODULE_${NAME}_git_repo_found}" PARENT_SCOPE)
 
-        _get_git_repo_latest_tag("${NAME}")
-        set(MODULE_${NAME}_git_latest_tag "${MODULE_${NAME}_git_latest_tag}" PARENT_SCOPE)
+        _get_git_tag("${NAME}")
+        set(MODULE_${NAME}_git_tag  "${MODULE_${NAME}_git_tag}"  PARENT_SCOPE)
+        set(MODULE_${NAME}_git_hash "${MODULE_${NAME}_git_hash}" PARENT_SCOPE)
 
         # auto-load modules from required_packages
         if(EXISTS "${CMAKE_SOURCE_DIR}/required_packages")
@@ -375,6 +427,8 @@ function(define_module)
         found_version    "${_EMPTY_SENTINEL}"
         git_repo         "${_git_repo}"
         git_repo_found   "${_EMPTY_SENTINEL}"
+        git_tag          "${_EMPTY_SENTINEL}"
+        git_hash         "${_EMPTY_SENTINEL}"
         git_latest_tag   "${_EMPTY_SENTINEL}"
         header_prefix    "${_header_prefix}"
         header_file_in   "${_header_file_in}"
