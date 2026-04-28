@@ -46,10 +46,12 @@ endfunction()
 # _propagate_module(<NAME>)  [internal]
 # ---------------------------------------------------------------------------
 macro(_propagate_module NAME)
-    set(MODULE_NAMES          "${MODULE_NAMES}"          PARENT_SCOPE)
-    set(MODULE_${NAME}_FIELDS "${MODULE_${NAME}_FIELDS}" PARENT_SCOPE)
-    foreach(_prop_key IN LISTS MODULE_${NAME}_FIELDS)
-        set(MODULE_${NAME}_${_prop_key} "${MODULE_${NAME}_${_prop_key}}" PARENT_SCOPE)
+    set(MODULE_NAMES "${MODULE_NAMES}" PARENT_SCOPE)
+    foreach(_prop_name IN LISTS MODULE_NAMES)
+        set(MODULE_${_prop_name}_FIELDS "${MODULE_${_prop_name}_FIELDS}" PARENT_SCOPE)
+        foreach(_prop_key IN LISTS MODULE_${_prop_name}_FIELDS)
+            set(MODULE_${_prop_name}_${_prop_key} "${MODULE_${_prop_name}_${_prop_key}}" PARENT_SCOPE)
+        endforeach()
     endforeach()
 endmacro()
 
@@ -372,7 +374,6 @@ function(define_module)
 
         define_module("${NAME}" "${_EMPTY_SENTINEL}" "${_EMPTY_SENTINEL}" ON)
         set(REQUIRED_PACKAGE_FILE "${CMAKE_SOURCE_DIR}/required_packages")
-      
         _load_required_packages(${REQUIRED_PACKAGE_FILE})
         _propagate_module("${NAME}")
         return()
@@ -381,10 +382,12 @@ function(define_module)
     # ---------------------------------------------------------------------
     # Re-entrant branch: compute and store all derived fields incrementally
     # ---------------------------------------------------------------------
-message(STATUS "define_module: calling _set_package_info for '${ARGV0}' min='${ARGV1}' max='${ARGV2}' primary='${ARGV3}'")
     _set_package_info("${ARGV0}" ${ARGV1} ${ARGV2} ${ARGV3})
     _set_metadata_file("${ARGV0}")
     _set_module_headers("${ARGV0}")
     _set_git_repo("${ARGV0}")
+    if(NOT "${ARGV3}" STREQUAL "ON")
+        _set_check_module("${ARGV0}" "${ARGV1}" "${ARGV2}")
+    endif()
     _propagate_module("${ARGV0}")
 endfunction()
