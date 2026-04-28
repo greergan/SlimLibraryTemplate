@@ -2,39 +2,32 @@ set(_EMPTY_SENTINEL "__EMPTY__")
 set(_SLIM_GIT_BASE "https://github.com/greergan")
 
 # ---------------------------------------------------------------------------
-# meta_create(<PREFIX> <n> key1 value1 key2 value2 ...)
+# meta_set(<PREFIX> <NAME> <KEY> <VALUE>)
 # ---------------------------------------------------------------------------
-function(meta_create PREFIX NAME)
-    set(_fields "")
-    set(_args ${ARGN})
-    list(LENGTH _args _len)
-    math(EXPR _pairs "${_len} / 2")
-
-    if(_pairs EQUAL 0)
-        set("${PREFIX}_${NAME}_FIELDS" "" PARENT_SCOPE)
-        return()
+function(meta_set PREFIX NAME KEY VALUE)
+    set(_fields "${${PREFIX}_${NAME}_FIELDS}")
+    list(FIND _fields "${KEY}" _idx)
+    if(_idx EQUAL -1)
+        list(APPEND _fields "${KEY}")
+        set("${PREFIX}_${NAME}_FIELDS" "${_fields}" PARENT_SCOPE)
     endif()
 
-    math(EXPR _last "${_pairs} - 1")
-    foreach(i RANGE 0 ${_last})
-        math(EXPR k_idx "2 * ${i}")
-        math(EXPR v_idx "2 * ${i} + 1")
+    if("${VALUE}" STREQUAL "")
+        set("${PREFIX}_${NAME}_${KEY}" "${_EMPTY_SENTINEL}" PARENT_SCOPE)
+    else()
+        set("${PREFIX}_${NAME}_${KEY}" "${VALUE}" PARENT_SCOPE)
+    endif()
 
-        list(GET _args ${k_idx} KEY)
-        list(GET _args ${v_idx} VAL)
-
-        set("${PREFIX}_${NAME}_${KEY}" "${VAL}" PARENT_SCOPE)
-        list(APPEND _fields "${KEY}")
-    endforeach()
-
-    set("${PREFIX}_${NAME}_FIELDS" "${_fields}" PARENT_SCOPE)
-    set(_current "${${PREFIX}_NAMES}")
-    list(APPEND _current "${NAME}")
-    set("${PREFIX}_NAMES" "${_current}" PARENT_SCOPE)
+    set(_names "${${PREFIX}_NAMES}")
+    list(FIND _names "${NAME}" _name_idx)
+    if(_name_idx EQUAL -1)
+        list(APPEND _names "${NAME}")
+        set("${PREFIX}_NAMES" "${_names}" PARENT_SCOPE)
+    endif()
 endfunction()
 
 # ---------------------------------------------------------------------------
-# meta_get(<PREFIX> <n> <KEY> <OUT_VAR>)
+# meta_get(<PREFIX> <NAME> <KEY> <OUT_VAR>)
 # ---------------------------------------------------------------------------
 function(meta_get PREFIX NAME KEY OUT_VAR)
     set(VAR "${PREFIX}_${NAME}_${KEY}")
@@ -50,7 +43,18 @@ function(meta_get PREFIX NAME KEY OUT_VAR)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _derive_module_type(<n> <OUT_TYPE>)  [internal]
+# _propagate_module(<NAME>)  [internal]
+# ---------------------------------------------------------------------------
+macro(_propagate_module NAME)
+    set(MODULE_NAMES          "${MODULE_NAMES}"          PARENT_SCOPE)
+    set(MODULE_${NAME}_FIELDS "${MODULE_${NAME}_FIELDS}" PARENT_SCOPE)
+    foreach(_prop_key IN LISTS MODULE_${NAME}_FIELDS)
+        set(MODULE_${NAME}_${_prop_key} "${MODULE_${NAME}_${_prop_key}}" PARENT_SCOPE)
+    endforeach()
+endmacro()
+
+# ---------------------------------------------------------------------------
+# _derive_module_type(<NAME> <OUT_TYPE>)  [internal]
 # ---------------------------------------------------------------------------
 function(_derive_module_type NAME OUT_TYPE)
     if("${NAME}" STREQUAL "SlimCommon")
@@ -60,22 +64,18 @@ function(_derive_module_type NAME OUT_TYPE)
         string(REGEX REPLACE "^SlimCommon" "" _suffix "${NAME}")
         string(REGEX MATCHALL "[A-Z][a-z0-9]*" _words "${_suffix}")
         list(LENGTH _words _word_count)
-
         if(_word_count LESS 1 OR _word_count GREATER 2)
             message(FATAL_ERROR "define_module: '${NAME}' must have 1 or 2 words after 'SlimCommon' (got ${_word_count}).")
         endif()
-
         set(${OUT_TYPE} "SlimCommonOtherlibSublib" PARENT_SCOPE)
 
     elseif("${NAME}" MATCHES "^Slim[A-Z]")
         string(REGEX REPLACE "^Slim" "" _suffix "${NAME}")
         string(REGEX MATCHALL "[A-Z][a-z0-9]*" _words "${_suffix}")
         list(LENGTH _words _word_count)
-
         if(NOT _word_count EQUAL 1)
             message(FATAL_ERROR "define_module: '${NAME}' must have exactly 1 word after 'Slim' (got ${_word_count}).")
         endif()
-
         set(${OUT_TYPE} "SlimLib" PARENT_SCOPE)
 
     else()
@@ -84,111 +84,46 @@ function(_derive_module_type NAME OUT_TYPE)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _store_pkgconfig_info(<n> <PKG_NAME>)  [internal]
+# _set_git_repo(<NAME>)  [internal]
 # ---------------------------------------------------------------------------
-function(_store_pkgconfig_info NAME PKG_NAME)
-    foreach(KEY IN ITEMS CFLAGS LDFLAGS LIBRARIES INCLUDE_DIRS LIBRARY_DIRS VERSION)
-        set(_val "${${NAME}_${KEY}}")
-        if("${_val}" STREQUAL "")
-            set(_val "${_EMPTY_SENTINEL}")
-        endif()
-        set(MODULE_${NAME}_pkg_${KEY} "${_val}" PARENT_SCOPE)
-    endforeach()
-
-    # pkg_check_modules does not reliably populate VERSION
-    # use the version fetched via pkg-config --modversion instead
-    set(_found "${${NAME}_RESOLVED_VERSION}")
-    if("${_found}" STREQUAL "")
-        set(_found "${_EMPTY_SENTINEL}")
-    endif()
-
-    set(MODULE_${NAME}_found_version "${_found}" PARENT_SCOPE)
-endfunction()
-
-# ---------------------------------------------------------------------------
-# _check_module(<n> <MIN_VERSION> <MAX_VERSION>)  [internal]
-# ---------------------------------------------------------------------------
-function(_check_module NAME MIN_VERSION MAX_VERSION)
-    find_package(PkgConfig REQUIRED)
-
-    meta_get(MODULE "${NAME}" lower _pkg_name)
-
-    # build version constraints as separate tokens
-    set(_constraints "")
-    if(NOT "${MIN_VERSION}" STREQUAL "${_EMPTY_SENTINEL}" AND NOT "${MIN_VERSION}" STREQUAL "")
-        list(APPEND _constraints "${_pkg_name}>=${MIN_VERSION}")
-    endif()
-    if(NOT "${MAX_VERSION}" STREQUAL "${_EMPTY_SENTINEL}" AND NOT "${MAX_VERSION}" STREQUAL "")
-        list(APPEND _constraints "${_pkg_name}<=${MAX_VERSION}")
-    endif()
-
-    if(_constraints)
-        pkg_check_modules("${NAME}" REQUIRED ${_constraints})
-    else()
-        pkg_check_modules("${NAME}" REQUIRED "${_pkg_name}")
-    endif()
-
-    # pkg_check_modules does not reliably populate VERSION
-    # call pkg-config directly to get the resolved version
-    find_program(_PKG_CONFIG_EXEC pkg-config)
-    if(_PKG_CONFIG_EXEC)
-        execute_process(
-            COMMAND "${_PKG_CONFIG_EXEC}" --modversion "${_pkg_name}"
-            OUTPUT_VARIABLE "${NAME}_RESOLVED_VERSION"
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-        )
-    endif()
-
-    _store_pkgconfig_info("${NAME}" "${_pkg_name}")
-
-    # propagate updated fields and values
-    set(MODULE_${NAME}_FIELDS "${MODULE_${NAME}_FIELDS}" PARENT_SCOPE)
-    foreach(KEY IN LISTS MODULE_${NAME}_FIELDS)
-        set(MODULE_${NAME}_${KEY} "${MODULE_${NAME}_${KEY}}" PARENT_SCOPE)
-    endforeach()
-endfunction()
-
-# ---------------------------------------------------------------------------
-# _check_git_repo(<n>)  [internal]
-# ---------------------------------------------------------------------------
-function(_check_git_repo NAME)
+function(_set_git_repo NAME)
     meta_get(MODULE "${NAME}" git_repo _repo_url)
 
     find_program(_CURL_EXEC curl)
     if(NOT _CURL_EXEC)
-        message(WARNING "_check_git_repo: curl not found, skipping repo check for '${NAME}'")
-        set(MODULE_${NAME}_git_repo_found "OFF" PARENT_SCOPE)
+        message(WARNING "_set_git_repo: curl not found, skipping repo check for '${NAME}'")
+        meta_set(MODULE "${NAME}" git_repo_found "OFF")
+        _propagate_module("${NAME}")
         return()
     endif()
 
     execute_process(
         COMMAND "${_CURL_EXEC}"
-            --silent
-            --output /dev/null
-            --write-out "%{http_code}"
-            --max-time 5
-            "${_repo_url}"
+            --silent --output /dev/null --write-out "%{http_code}"
+            --max-time 5 "${_repo_url}"
         OUTPUT_VARIABLE _http_code
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
 
     if("${_http_code}" EQUAL 301)
-        set(MODULE_${NAME}_git_repo_found "ON" PARENT_SCOPE)
+        meta_set(MODULE "${NAME}" git_repo_found "ON")
     else()
-        message(WARNING "_check_git_repo: '${_repo_url}' returned ${_http_code}, expected 301")
-        set(MODULE_${NAME}_git_repo_found "OFF" PARENT_SCOPE)
+        message(WARNING "_set_git_repo: '${_repo_url}' returned ${_http_code}, expected 301")
+        meta_set(MODULE "${NAME}" git_repo_found "OFF")
     endif()
+
+    _propagate_module("${NAME}")
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _get_git_tag(<n>)  [internal] - only called for the primary module
+# _set_git_tag(<NAME>)  [internal] — primary module only
 # ---------------------------------------------------------------------------
-function(_get_git_tag NAME)
+function(_set_git_tag NAME)
     if(SLIM_USE_LOCAL_SOURCE)
-        set(MODULE_${NAME}_git_tag  "0.0.0" PARENT_SCOPE)
-        set(MODULE_${NAME}_git_hash "none"  PARENT_SCOPE)
+        meta_set(MODULE "${NAME}" git_tag  "0.0.0")
+        meta_set(MODULE "${NAME}" git_hash "none")
+        _propagate_module("${NAME}")
         return()
     endif()
 
@@ -205,40 +140,36 @@ function(_get_git_tag NAME)
     set(_tag "${CMAKE_MATCH_1}")
 
     if("${_tag}" STREQUAL "")
-        set(_tag  "${_EMPTY_SENTINEL}")
-        set(_hash "${_EMPTY_SENTINEL}")
-    else()
-        # get the hash of the resolved tag from the remote
-        execute_process(
-            COMMAND git ls-remote "${_repo_url}" "refs/tags/${_tag}"
-            OUTPUT_VARIABLE _hash_raw
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-        )
-
-        # ls-remote output is "<hash>\trefs/tags/<tag>" — extract the hash
-        string(REGEX MATCH "^([a-f0-9]+)" _ "${_hash_raw}")
-        set(_hash "${CMAKE_MATCH_1}")
-
-        # shorten to 7 chars to match git rev-parse --short
-        string(SUBSTRING "${_hash}" 0 7 _hash)
-
-        if("${_hash}" STREQUAL "")
-            set(_hash "${_EMPTY_SENTINEL}")
-        endif()
+        meta_set(MODULE "${NAME}" git_tag  "")
+        meta_set(MODULE "${NAME}" git_hash "")
+        _propagate_module("${NAME}")
+        return()
     endif()
 
-    set(MODULE_${NAME}_git_tag  "${_tag}"  PARENT_SCOPE)
-    set(MODULE_${NAME}_git_hash "${_hash}" PARENT_SCOPE)
+    execute_process(
+        COMMAND git ls-remote "${_repo_url}" "refs/tags/${_tag}"
+        OUTPUT_VARIABLE _hash_raw
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    string(REGEX MATCH "^([a-f0-9]+)" _ "${_hash_raw}")
+    set(_hash "${CMAKE_MATCH_1}")
+    string(SUBSTRING "${_hash}" 0 7 _hash)
+
+    meta_set(MODULE "${NAME}" git_tag  "${_tag}")
+    meta_set(MODULE "${NAME}" git_hash "${_hash}")
+    _propagate_module("${NAME}")
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _get_git_repo_latest_tag(<n>)  [internal] - called for auto-loaded modules
+# _set_git_repo_latest_tag(<NAME>)  [internal] — auto-loaded modules
 # ---------------------------------------------------------------------------
-function(_get_git_repo_latest_tag NAME)
+function(_set_git_repo_latest_tag NAME)
     meta_get(MODULE "${NAME}" git_repo_found _repo_found)
     if(NOT _repo_found)
-        set(MODULE_${NAME}_git_latest_tag "${_EMPTY_SENTINEL}" PARENT_SCOPE)
+        meta_set(MODULE "${NAME}" git_latest_tag "")
+        _propagate_module("${NAME}")
         return()
     endif()
 
@@ -246,8 +177,9 @@ function(_get_git_repo_latest_tag NAME)
 
     find_program(_GIT_EXEC git)
     if(NOT _GIT_EXEC)
-        message(WARNING "_get_git_repo_latest_tag: git not found, skipping tag fetch for '${NAME}'")
-        set(MODULE_${NAME}_git_latest_tag "${_EMPTY_SENTINEL}" PARENT_SCOPE)
+        message(WARNING "_set_git_repo_latest_tag: git not found, skipping tag fetch for '${NAME}'")
+        meta_set(MODULE "${NAME}" git_latest_tag "")
+        _propagate_module("${NAME}")
         return()
     endif()
 
@@ -258,51 +190,68 @@ function(_get_git_repo_latest_tag NAME)
         ERROR_QUIET
     )
 
-    string(REGEX MATCH "refs/tags/([^\n^]+)" _tag_match "${_tag_output}")
-    set(_latest_tag "${CMAKE_MATCH_1}")
-
-    if("${_latest_tag}" STREQUAL "")
-        set(_latest_tag "${_EMPTY_SENTINEL}")
-    endif()
-
-    set(MODULE_${NAME}_git_latest_tag "${_latest_tag}" PARENT_SCOPE)
+    string(REGEX MATCH "refs/tags/([^\n^]+)" _ "${_tag_output}")
+    meta_set(MODULE "${NAME}" git_latest_tag "${CMAKE_MATCH_1}")
+    _propagate_module("${NAME}")
 endfunction()
 
 # ---------------------------------------------------------------------------
-# _propagate_module(<n>)  [internal]
+# _set_check_module(<NAME> <MIN_VERSION> <MAX_VERSION>)  [internal]
 # ---------------------------------------------------------------------------
-macro(_propagate_module NAME)
-    set(MODULE_NAMES                  "${MODULE_NAMES}"                  PARENT_SCOPE)
-    set(MODULE_${NAME}_FIELDS         "${MODULE_${NAME}_FIELDS}"         PARENT_SCOPE)
-    set(MODULE_${NAME}_git_repo_found "${MODULE_${NAME}_git_repo_found}" PARENT_SCOPE)
-    set(MODULE_${NAME}_git_latest_tag "${MODULE_${NAME}_git_latest_tag}" PARENT_SCOPE)
-    set(MODULE_${NAME}_git_tag        "${MODULE_${NAME}_git_tag}"        PARENT_SCOPE)
-    set(MODULE_${NAME}_git_hash       "${MODULE_${NAME}_git_hash}"       PARENT_SCOPE)
-    foreach(KEY IN LISTS MODULE_${NAME}_FIELDS)
-        set(MODULE_${NAME}_${KEY}     "${MODULE_${NAME}_${KEY}}"         PARENT_SCOPE)
+function(_set_check_module NAME MIN_VERSION MAX_VERSION)
+    find_package(PkgConfig REQUIRED)
+
+    meta_get(MODULE "${NAME}" lower _pkg_name)
+
+    set(_constraints "")
+    if(NOT "${MIN_VERSION}" STREQUAL "${_EMPTY_SENTINEL}" AND NOT "${MIN_VERSION}" STREQUAL "")
+        list(APPEND _constraints "${_pkg_name}>=${MIN_VERSION}")
+    endif()
+    if(NOT "${MAX_VERSION}" STREQUAL "${_EMPTY_SENTINEL}" AND NOT "${MAX_VERSION}" STREQUAL "")
+        list(APPEND _constraints "${_pkg_name}<=${MAX_VERSION}")
+    endif()
+
+    if(_constraints)
+        pkg_check_modules("${NAME}" REQUIRED ${_constraints})
+    else()
+        pkg_check_modules("${NAME}" REQUIRED "${_pkg_name}")
+    endif()
+
+    find_program(_PKG_CONFIG_EXEC pkg-config)
+    if(_PKG_CONFIG_EXEC)
+        execute_process(
+            COMMAND "${_PKG_CONFIG_EXEC}" --modversion "${_pkg_name}"
+            OUTPUT_VARIABLE "${NAME}_RESOLVED_VERSION"
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+
+    foreach(KEY IN ITEMS CFLAGS LDFLAGS LIBRARIES INCLUDE_DIRS LIBRARY_DIRS VERSION)
+        meta_set(MODULE "${NAME}" "pkg_${KEY}" "${${NAME}_${KEY}}")
     endforeach()
-endmacro()
+
+    meta_set(MODULE "${NAME}" found_version "${${NAME}_RESOLVED_VERSION}")
+    _propagate_module("${NAME}")
+endfunction()
 
 # ---------------------------------------------------------------------------
 # define_module([NAME] [min_version] [max_version])
-#   No args: derives name from CMAKE_SOURCE_DIR and auto-loads required_packages
+#   No args: derives name from CMAKE_SOURCE_DIR and auto-loads required_packages.
 # ---------------------------------------------------------------------------
 function(define_module)
+    # ------------------------------------------------------------------
+    # No-arg branch: primary module derived from CMAKE_SOURCE_DIR
+    # ------------------------------------------------------------------
     if(ARGC EQUAL 0)
         cmake_path(GET CMAKE_SOURCE_DIR FILENAME NAME)
 
-        # primary=ON is only ever set here via the 4th argument
         define_module("${NAME}" "${_EMPTY_SENTINEL}" "${_EMPTY_SENTINEL}" ON)
+        _set_git_repo("${NAME}")
+        _set_git_tag("${NAME}")
+        _set_git_repo_latest_tag("${NAME}")
         _propagate_module("${NAME}")
 
-        _check_git_repo("${NAME}")
-        set(MODULE_${NAME}_git_repo_found "${MODULE_${NAME}_git_repo_found}" PARENT_SCOPE)
-
-        _get_git_tag("${NAME}")
-        set(MODULE_${NAME}_git_tag  "${MODULE_${NAME}_git_tag}"  PARENT_SCOPE)
-        set(MODULE_${NAME}_git_hash "${MODULE_${NAME}_git_hash}" PARENT_SCOPE)
-
-        # auto-load modules from required_packages
         if(EXISTS "${CMAKE_SOURCE_DIR}/required_packages")
             file(STRINGS "${CMAKE_SOURCE_DIR}/required_packages" _package_lines REGEX "^[^#\n]")
             foreach(_line IN LISTS _package_lines)
@@ -314,7 +263,6 @@ function(define_module)
 
                     set(_pkg_min "${_EMPTY_SENTINEL}")
                     set(_pkg_max "${_EMPTY_SENTINEL}")
-
                     if(_token_count GREATER 1)
                         list(GET _tokens 1 _pkg_min)
                         if("${_pkg_min}" STREQUAL "")
@@ -329,16 +277,11 @@ function(define_module)
                     endif()
 
                     define_module("${_pkg}" "${_pkg_min}" "${_pkg_max}")
+                    _set_check_module("${_pkg}" "${_pkg_min}" "${_pkg_max}")
+                    _set_git_repo("${_pkg}")
+                    _set_git_tag("${_pkg}")
+                    _set_git_repo_latest_tag("${_pkg}")
                     _propagate_module("${_pkg}")
-
-                    _check_module("${_pkg}" "${_pkg_min}" "${_pkg_max}")
-                    _propagate_module("${_pkg}")
-
-                    _check_git_repo("${_pkg}")
-                    set(MODULE_${_pkg}_git_repo_found "${MODULE_${_pkg}_git_repo_found}" PARENT_SCOPE)
-
-                    _get_git_repo_latest_tag("${_pkg}")
-                    set(MODULE_${_pkg}_git_latest_tag "${MODULE_${_pkg}_git_latest_tag}" PARENT_SCOPE)
                 endif()
             endforeach()
         else()
@@ -346,27 +289,25 @@ function(define_module)
         endif()
 
         return()
-    else()
-        set(NAME "${ARGV0}")
+    endif()
 
-        # primary=ON only when explicitly passed as 4th argument from no-arg branch
-        set(_primary OFF)
-        if(ARGC GREATER 3 AND "${ARGV3}" STREQUAL "ON")
-            set(_primary ON)
-        endif()
+    # ------------------------------------------------------------------
+    # Named branch: compute and store all derived fields incrementally
+    # ------------------------------------------------------------------
+    set(NAME "${ARGV0}")
 
-        set(_min_version "${_EMPTY_SENTINEL}")
-        set(_max_version "${_EMPTY_SENTINEL}")
-        if(ARGC GREATER 1)
-            if(NOT "${ARGV1}" STREQUAL "")
-                set(_min_version "${ARGV1}")
-            endif()
-        endif()
-        if(ARGC GREATER 2)
-            if(NOT "${ARGV2}" STREQUAL "")
-                set(_max_version "${ARGV2}")
-            endif()
-        endif()
+    set(_primary OFF)
+    if(ARGC GREATER 3 AND "${ARGV3}" STREQUAL "ON")
+        set(_primary ON)
+    endif()
+
+    set(_min_version "${_EMPTY_SENTINEL}")
+    set(_max_version "${_EMPTY_SENTINEL}")
+    if(ARGC GREATER 1 AND NOT "${ARGV1}" STREQUAL "")
+        set(_min_version "${ARGV1}")
+    endif()
+    if(ARGC GREATER 2 AND NOT "${ARGV2}" STREQUAL "")
+        set(_max_version "${ARGV2}")
     endif()
 
     _derive_module_type("${NAME}" _type)
@@ -374,78 +315,57 @@ function(define_module)
     string(TOUPPER "${NAME}" _upper)
     string(TOLOWER "${NAME}" _lower)
 
-    set(_metadata_file "${_lower}.pc")
-    set(_git_repo      "${_SLIM_GIT_BASE}/${NAME}.git")
+    meta_set(MODULE "${NAME}" upper         "${_upper}")
+    meta_set(MODULE "${NAME}" lower         "${_lower}")
+    meta_set(MODULE "${NAME}" primary       "${_primary}")
+    meta_set(MODULE "${NAME}" min_version   "${_min_version}")
+    meta_set(MODULE "${NAME}" max_version   "${_max_version}")
+    meta_set(MODULE "${NAME}" git_repo      "${_SLIM_GIT_BASE}/${NAME}.git")
+    meta_set(MODULE "${NAME}" metadata_file "${_lower}.pc")
 
     if("${_type}" STREQUAL "SlimLib")
-        set(_hpp_only ON)
+        meta_set(MODULE "${NAME}" hpp_only "ON")
     else()
-        set(_hpp_only OFF)
+        meta_set(MODULE "${NAME}" hpp_only "OFF")
     endif()
 
     if("${_type}" STREQUAL "SlimCommon")
-        set(_header_prefix   "${_EMPTY_SENTINEL}")
-        set(_header_file_in  "${_EMPTY_SENTINEL}")
-        set(_header_file_out "${_EMPTY_SENTINEL}")
-        set(_include_dir     "${_EMPTY_SENTINEL}")
+        meta_set(MODULE "${NAME}" header_prefix   "")
+        meta_set(MODULE "${NAME}" header_file_in  "")
+        meta_set(MODULE "${NAME}" header_file_out "")
+        meta_set(MODULE "${NAME}" include_dir     "")
 
     elseif("${_type}" STREQUAL "SlimCommonOtherlibSublib")
         string(REGEX REPLACE "^SlimCommon" "" _suffix "${NAME}")
         string(REGEX MATCHALL "[A-Z][a-z0-9]*" _words "${_suffix}")
-
         list(GET _words 0 _word0)
         string(TOLOWER "${_word0}" _word0)
         list(LENGTH _words _word_count)
 
         if(_word_count EQUAL 1)
-            set(_header_prefix   "${_word0}")
-            set(_header_file_in  "include/slim/${_word0}.h.in")
-            set(_include_dir     "include/slim")
+            set(_hdr_in  "include/slim/${_word0}.h.in")
+            set(_inc_dir "include/slim")
+            meta_set(MODULE "${NAME}" header_prefix "${_word0}")
         else()
             list(GET _words 1 _word1)
             string(TOLOWER "${_word1}" _word1)
-            set(_header_prefix   "${_word1}")
-            set(_header_file_in  "include/slim/${_word0}/${_word1}.h.in")
-            set(_include_dir     "include/slim/${_word0}")
+            set(_hdr_in  "include/slim/${_word0}/${_word1}.h.in")
+            set(_inc_dir "include/slim/${_word0}")
+            meta_set(MODULE "${NAME}" header_prefix "${_word1}")
         endif()
-        string(REGEX REPLACE "\.in$" "" _header_file_out "${_header_file_in}")
+        string(REGEX REPLACE "\.in$" "" _hdr_out "${_hdr_in}")
+        meta_set(MODULE "${NAME}" header_file_in  "${_hdr_in}")
+        meta_set(MODULE "${NAME}" header_file_out "${_hdr_out}")
+        meta_set(MODULE "${NAME}" include_dir     "${_inc_dir}")
 
     else() # SlimLib
-        set(_header_prefix   "${NAME}")
-        set(_header_file_in  "include/slim/${NAME}.hpp.in")
-        set(_include_dir     "include/slim")
-        string(REGEX REPLACE "\.in$" "" _header_file_out "${_header_file_in}")
+        set(_hdr_in "include/slim/${NAME}.hpp.in")
+        string(REGEX REPLACE "\.in$" "" _hdr_out "${_hdr_in}")
+        meta_set(MODULE "${NAME}" header_prefix   "${NAME}")
+        meta_set(MODULE "${NAME}" header_file_in  "${_hdr_in}")
+        meta_set(MODULE "${NAME}" header_file_out "${_hdr_out}")
+        meta_set(MODULE "${NAME}" include_dir     "include/slim")
     endif()
 
-    meta_create(MODULE "${NAME}"
-        upper            "${_upper}"
-        lower            "${_lower}"
-        primary          "${_primary}"
-        hpp_only         "${_hpp_only}"
-        min_version      "${_min_version}"
-        max_version      "${_max_version}"
-        found_version    "${_EMPTY_SENTINEL}"
-        git_repo         "${_git_repo}"
-        git_repo_found   "${_EMPTY_SENTINEL}"
-        git_tag          "${_EMPTY_SENTINEL}"
-        git_hash         "${_EMPTY_SENTINEL}"
-        git_latest_tag   "${_EMPTY_SENTINEL}"
-        header_prefix    "${_header_prefix}"
-        header_file_in   "${_header_file_in}"
-        header_file_out  "${_header_file_out}"
-        include_dir      "${_include_dir}"
-        metadata_file    "${_metadata_file}"
-        pkg_CFLAGS       "${_EMPTY_SENTINEL}"
-        pkg_LDFLAGS      "${_EMPTY_SENTINEL}"
-        pkg_LIBRARIES    "${_EMPTY_SENTINEL}"
-        pkg_INCLUDE_DIRS "${_EMPTY_SENTINEL}"
-        pkg_LIBRARY_DIRS "${_EMPTY_SENTINEL}"
-        pkg_VERSION      "${_EMPTY_SENTINEL}"
-    )
-
-    set(MODULE_NAMES          "${MODULE_NAMES}"          PARENT_SCOPE)
-    set(MODULE_${NAME}_FIELDS "${MODULE_${NAME}_FIELDS}" PARENT_SCOPE)
-    foreach(KEY IN LISTS MODULE_${NAME}_FIELDS)
-        set(MODULE_${NAME}_${KEY} "${MODULE_${NAME}_${KEY}}" PARENT_SCOPE)
-    endforeach()
+    _propagate_module("${NAME}")
 endfunction()
