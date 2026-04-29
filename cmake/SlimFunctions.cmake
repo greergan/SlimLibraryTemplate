@@ -369,6 +369,52 @@ function(_set_package_info NAME)
     _propagate_module("${NAME}")
 endfunction()
 
+# ---------------------------------------------------------------------------
+# _set_source_info(<NAME>)  [internal]
+# ---------------------------------------------------------------------------
+function(_set_source_info NAME)
+    meta_get(MODULE "${NAME}" primary _primary)
+
+    if(_primary)
+        if(SLIM_USE_LOCAL_SOURCE)
+            meta_set(MODULE "${NAME}" using_local_src "ON")
+            meta_set(MODULE "${NAME}" src_dir "${CMAKE_SOURCE_DIR}")
+        else()
+            meta_get(MODULE "${NAME}" git_repo       _repo_url)
+            meta_get(MODULE "${NAME}" git_latest_tag _git_tag)
+
+            include(FetchContent)
+            FetchContent_Declare(
+                "${NAME}"
+                GIT_REPOSITORY "${_repo_url}"
+                GIT_TAG        "${_git_tag}"
+            )
+            FetchContent_MakeAvailable("${NAME}")
+
+            string(TOLOWER "${NAME}" _lower)
+            meta_set(MODULE "${NAME}" src_dir "${${_lower}_SOURCE_DIR}")
+        endif()
+    else()
+        if(NOT SLIM_USE_LOCAL_SOURCE)
+            meta_get(MODULE "${NAME}" git_repo       _repo_url)
+            meta_get(MODULE "${NAME}" git_latest_tag _git_tag)
+
+            include(FetchContent)
+            FetchContent_Declare(
+                "${NAME}"
+                GIT_REPOSITORY "${_repo_url}"
+                GIT_TAG        "${_git_tag}"
+            )
+            FetchContent_MakeAvailable("${NAME}")
+
+            string(TOLOWER "${NAME}" _lower)
+            meta_set(MODULE "${NAME}" src_dir "${${_lower}_SOURCE_DIR}")
+        endif()
+    endif()
+
+    _propagate_module("${NAME}")
+endfunction()
+
 # -------------------------------------------------------------------------------
 # define_module([NAME] [min_version] [max_version] [ON])
 #   No args: derives name from CMAKE_SOURCE_DIR and auto-loads required_packages.
@@ -395,5 +441,6 @@ function(define_module)
     _set_module_headers("${ARGV0}")
     _set_git_repo("${ARGV0}")
     _set_check_module("${ARGV0}" "${ARGV1}" "${ARGV2}")
+    _set_source_info("${ARGV0}")
     _propagate_module("${ARGV0}")
 endfunction()
