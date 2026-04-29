@@ -1,5 +1,0 @@
-if(HPP_HEADER_ONLY)
-    configure_file("${HPP_IN_FILE}" "${HPP_OUT_FILE}" @ONLY)
-else()
-    configure_file("${H_IN_FILE}" "${H_OUT_FILE}" @ONLY)
-endif()
