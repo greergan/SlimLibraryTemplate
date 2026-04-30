@@ -17,27 +17,27 @@ function(compile_targets)
     if(NOT _primary)
         message(FATAL_ERROR "compile_targets: no primary module defined")
     endif()
-
+ 
     meta_get(MODULE "${_primary}" lower          _lower)
     meta_get(MODULE "${_primary}" git_tag        _version)
     meta_get(MODULE "${_primary}" src_dir        _src_dir)
     meta_get(MODULE "${_primary}" include_dir    _inc_dir)
     meta_get(MODULE "${_primary}" hpp_only       _hpp_only)
-
+ 
     if(_hpp_only)
         message(STATUS "Library targets: header-only, skipping shared/static build")
         return()
     endif()
-
+ 
     set(_src "${_src_dir}/src/main.cpp")
     if(NOT EXISTS "${_src}")
         message(FATAL_ERROR "setup_slim_library_targets: source not found '${_src}'")
     endif()
-
+ 
     # --- Version components -----------------------------------------------
     string(REGEX MATCH "^([0-9]+)" _ "${_version}")
     set(_version_major "${CMAKE_MATCH_1}")
-
+ 
     # --- Shared library ---------------------------------------------------
     add_library(${_lower}_shared SHARED "${_src}")
     set_target_properties(${_lower}_shared PROPERTIES
@@ -47,8 +47,12 @@ function(compile_targets)
     )
     add_custom_command(TARGET ${_lower}_shared POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Shared lib: $<TARGET_FILE_NAME:${_lower}_shared>"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:${_lower}_shared>
+            "${CMAKE_CURRENT_BINARY_DIR}/dist/$<TARGET_FILE_NAME:${_lower}_shared>"
     )
-
+ 
     # --- Static library ---------------------------------------------------
     add_library(${_lower}_static STATIC "${_src}")
     set_target_properties(${_lower}_static PROPERTIES
@@ -56,8 +60,12 @@ function(compile_targets)
     )
     add_custom_command(TARGET ${_lower}_static POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Static lib: $<TARGET_FILE_NAME:${_lower}_static>"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:${_lower}_static>
+            "${CMAKE_CURRENT_BINARY_DIR}/dist/$<TARGET_FILE_NAME:${_lower}_static>"
     )
-
+ 
     # --- Common target settings -------------------------------------------
     foreach(_target ${_lower}_shared ${_lower}_static)
         target_include_directories(${_target}
@@ -70,10 +78,10 @@ function(compile_targets)
         apply_slim_compile_options(${_target})
         target_compile_features(${_target} PUBLIC cxx_std_${SLIM_CXX_STANDARD})
     endforeach()
-
+ 
     # --- Alias ------------------------------------------------------------
     add_library(${_lower} ALIAS ${_lower}_shared)
-
+ 
     # --- Install ----------------------------------------------------------
     meta_get(MODULE "${_primary}" upper _upper)
     install(TARGETS ${_lower}_shared ${_lower}_static
@@ -82,8 +90,91 @@ function(compile_targets)
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
-
+ 
     _propagate_module("${_primary}")
+endfunction()
+# ---------------------------------------------------------------------------
+# make_install()
+# Installs headers, export targets, CMake config/version files, and the
+# pkg-config metadata file derived from the primary module's metadata.
+# For header-only modules only the generated .hpp is installed.
+# ---------------------------------------------------------------------------
+function(make_install)
+    get_primary_module(_primary)
+    if(NOT _primary)
+        message(FATAL_ERROR "make_install: no primary module defined")
+    endif()
+ 
+    include(CMakePackageConfigHelpers)
+ 
+    meta_get(MODULE "${_primary}" upper             _upper)
+    meta_get(MODULE "${_primary}" lower             _lower)
+    meta_get(MODULE "${_primary}" git_tag           _version)
+    meta_get(MODULE "${_primary}" hpp_only          _hpp_only)
+    meta_get(MODULE "${_primary}" header_file_in    _hdr_in)
+    meta_get(MODULE "${_primary}" header_file_out   _hdr_out)
+    meta_get(MODULE "${_primary}" include_dir       _inc_dir)
+    meta_get(MODULE "${_primary}" src_dir           _src_dir)
+    meta_get(MODULE "${_primary}" metadata_file_in  _metadata_file_in)
+    meta_get(MODULE "${_primary}" metadata_file_out _metadata_file_out)
+ 
+    set(_dist_dir "${CMAKE_CURRENT_BINARY_DIR}/dist")
+ 
+    # --- Derive install sub-directory from include_dir --------------------
+    string(REGEX REPLACE "^include/" "" _install_dir "${_inc_dir}")
+ 
+    # --- Header -----------------------------------------------------------
+    if(NOT _hdr_in)
+        message(FATAL_ERROR "make_install: no header_file_in defined for '${_primary}'")
+    endif()
+ 
+    configure_file(
+        "${_src_dir}/${_hdr_in}"
+        "${_dist_dir}/${_hdr_out}"
+        @ONLY
+    )
+    install(FILES "${_dist_dir}/${_hdr_out}"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${_install_dir}
+    )
+ 
+    # --- Export targets + CMake config files (compiled modules only) ------
+    if(NOT _hpp_only)
+        install(EXPORT ${_upper}Targets
+            FILE        ${_upper}Targets.cmake
+            NAMESPACE   Slim::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_upper}
+        )
+ 
+        write_basic_package_version_file(
+            "${_dist_dir}/${_upper}ConfigVersion.cmake"
+            VERSION       ${_version}
+            COMPATIBILITY AnyNewerVersion
+        )
+ 
+        file(WRITE "${_dist_dir}/${_upper}Config.cmake"
+            "include(\"\${CMAKE_CURRENT_LIST_DIR}/${_upper}Targets.cmake\")\n"
+        )
+ 
+        install(FILES
+            "${_dist_dir}/${_upper}Config.cmake"
+            "${_dist_dir}/${_upper}ConfigVersion.cmake"
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_upper}
+        )
+    endif()
+ 
+    # --- pkg-config metadata ----------------------------------------------
+    configure_file(
+        "${_src_dir}/${_metadata_file_in}"
+        "${_dist_dir}/${_metadata_file_out}"
+        @ONLY
+    )
+ 
+    install(FILES
+        "${_dist_dir}/${_metadata_file_out}"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    )
+ 
+    message(STATUS "make_install: configured for '${_upper}'")
 endfunction()
 
 # ---------------------------------------------------------------------------
