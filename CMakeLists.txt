@@ -84,7 +84,6 @@ endforeach()
 # Do not rewrite below here
 return()
 
-include(RunCatch2Tests)
 include(RunInstall)
 include(CMakePackageConfigHelpers)
 include(RunPackager)
