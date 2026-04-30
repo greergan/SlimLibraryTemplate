@@ -38,11 +38,37 @@ function(generate_main_cpp)
     file(WRITE "${_out_src}" "${_includes_block}\n")
     message(STATUS "generate_main_cpp: wrote ${_out_src}")
 
-    # --- Git commit the generated file ------------------------------------
+    # --- Optionally git commit the generated file -------------------------
     find_program(_GIT_EXEC git)
     if(NOT _GIT_EXEC)
         message(WARNING "generate_main_cpp: git not found, skipping auto-commit")
         return()
+    endif()
+
+    execute_process(
+        COMMAND "${_GIT_EXEC}" -C "${_src_dir}" diff --quiet HEAD -- src/main.cpp
+        RESULT_VARIABLE _git_diff_result
+    )
+    if(_git_diff_result EQUAL 0)
+        message(STATUS "generate_main_cpp: src/main.cpp unchanged, skipping commit prompt")
+        return()
+    endif()
+
+    message(STATUS "generate_main_cpp: src/main.cpp was regenerated")
+    message(STATUS "")
+    if(NOT AUTO_CHECK_IN)
+        message(STATUS "  Commit src/main.cpp with message: 'automated: regenerate src/main.cpp'?")
+        message(STATUS "  Press [Enter] to continue, or Ctrl+C to abort.")
+        message(STATUS "")
+
+        execute_process(
+            COMMAND bash -c "read -r _reply < /dev/tty && [[ \"$_reply\" =~ ^[yY]([eE][sS])?$ ]]"
+            RESULT_VARIABLE _read_result
+        )
+        if(NOT _read_result EQUAL 0)
+            message(STATUS "generate_main_cpp: skipping commit")
+            return()
+        endif()
     endif()
 
     execute_process(
@@ -52,15 +78,6 @@ function(generate_main_cpp)
     )
     if(NOT _git_add_result EQUAL 0)
         message(WARNING "generate_main_cpp: git add failed\n${_git_add_error}")
-        return()
-    endif()
-
-    execute_process(
-        COMMAND "${_GIT_EXEC}" -C "${_src_dir}" diff --cached --quiet
-        RESULT_VARIABLE _git_diff_result
-    )
-    if(_git_diff_result EQUAL 0)
-        message(STATUS "generate_main_cpp: src/main.cpp unchanged, nothing to commit")
         return()
     endif()
 

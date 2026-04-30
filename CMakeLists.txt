@@ -4,6 +4,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(SLIM_CXX_STANDARD "23")
 set(SLIM_CXX_FLAGS "")
 set(_SLIM_GIT_BASE "https://github.com/greergan")
+set(AUTO_CHECK_IN off)
 
 cmake_path(GET CMAKE_SOURCE_DIR FILENAME _project_name)
 project(${_project_name} LANGUAGES CXX)
