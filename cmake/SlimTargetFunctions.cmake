@@ -23,6 +23,11 @@ function(compile_targets)
     meta_get(MODULE "${_primary}" src_dir        _src_dir)
     meta_get(MODULE "${_primary}" include_dir    _inc_dir)
     meta_get(MODULE "${_primary}" hpp_only       _hpp_only)
+    meta_get(MODULE "${_primary}" dist_dir       _dist_dir)
+
+    if(NOT _dist_dir)
+        message(FATAL_ERROR "compile_targets: no dist_dir defined for '${_primary}'")
+    endif()
 
     if(_hpp_only)
         message(STATUS "Library targets: header-only, skipping shared/static build")
@@ -47,10 +52,18 @@ function(compile_targets)
     )
     add_custom_command(TARGET ${_lower}_shared POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Shared lib: $<TARGET_FILE_NAME:${_lower}_shared>"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_dist_dir}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:${_lower}_shared>
-            "${CMAKE_CURRENT_BINARY_DIR}/dist/$<TARGET_FILE_NAME:${_lower}_shared>"
+            "${_dist_dir}/$<TARGET_FILE_NAME:${_lower}_shared>"
+        # soname symlink: libfoo.so.1 -> libfoo.so.1.2.3
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            $<TARGET_FILE_NAME:${_lower}_shared>
+            "${_dist_dir}/$<TARGET_SONAME_FILE_NAME:${_lower}_shared>"
+        # linker symlink: libfoo.so -> libfoo.so.1.2.3
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            $<TARGET_FILE_NAME:${_lower}_shared>
+            "${_dist_dir}/$<TARGET_LINKER_FILE_NAME:${_lower}_shared>"
     )
 
     # --- Static library ---------------------------------------------------
@@ -60,10 +73,10 @@ function(compile_targets)
     )
     add_custom_command(TARGET ${_lower}_static POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Static lib: $<TARGET_FILE_NAME:${_lower}_static>"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_dist_dir}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:${_lower}_static>
-            "${CMAKE_CURRENT_BINARY_DIR}/dist/$<TARGET_FILE_NAME:${_lower}_static>"
+            "${_dist_dir}/$<TARGET_FILE_NAME:${_lower}_static>"
     )
 
     # --- Common target settings -------------------------------------------

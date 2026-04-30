@@ -22,8 +22,11 @@ function(make_install_artifacts)
     meta_get(MODULE "${_primary}" src_dir           _src_dir)
     meta_get(MODULE "${_primary}" metadata_file_in  _metadata_file_in)
     meta_get(MODULE "${_primary}" metadata_file_out _metadata_file_out)
+    meta_get(MODULE "${_primary}" dist_dir          _dist_dir)
 
-    set(_dist_dir "${CMAKE_CURRENT_BINARY_DIR}/dist")
+    if(NOT _dist_dir)
+        message(FATAL_ERROR "make_install_artifacts: no dist_dir defined for '${_primary}'")
+    endif()
 
     # --- Derive install sub-directory from include_dir --------------------
     string(REGEX REPLACE "^include/" "" _install_dir "${_inc_dir}")
@@ -97,6 +100,11 @@ function(make_packages)
     meta_get(MODULE "${_primary}" lower       _lower)
     meta_get(MODULE "${_primary}" git_tag     _version)
     meta_get(MODULE "${_primary}" upper       _upper)
+    meta_get(MODULE "${_primary}" dist_dir    _dist_dir)
+
+    if(NOT _dist_dir)
+        message(FATAL_ERROR "make_packages: no dist_dir defined for '${_primary}'")
+    endif()
 
     # --- Architecture ---------------------------------------------------------
     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _arch)
@@ -146,7 +154,7 @@ function(make_packages)
     include(CPack)
 
     add_custom_target(dist
-        COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${CMAKE_CURRENT_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${_dist_dir}"
         COMMAND ${CMAKE_CPACK_COMMAND} --config "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Installing and building distribution packages for '${_lower}'"
