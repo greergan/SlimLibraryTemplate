@@ -87,6 +87,68 @@ function(compile_targets)
 endfunction()
 
 # ---------------------------------------------------------------------------
+# test_targets()
+# Compiles src/test.cpp into two executables against the libraries produced by
+# compile_targets(). test_shared links against the shared and static libraries.
+# test_static is fully statically linked against the static library (-static /
+# /MT). Both mirror the primary module's include directories and compile
+# options, and are run as a POST_BUILD step.
+# ---------------------------------------------------------------------------
+function(test_targets)
+    get_primary_module(_primary)
+    if(NOT _primary)
+        message(FATAL_ERROR "test_targets: no primary module defined")
+    endif()
+
+    meta_get(MODULE "${_primary}" lower       _lower)
+    meta_get(MODULE "${_primary}" src_dir     _src_dir)
+    meta_get(MODULE "${_primary}" include_dir _inc_dir)
+    meta_get(MODULE "${_primary}" hpp_only    _hpp_only)
+
+    set(_test_src "${_src_dir}/src/test.cpp")
+    if(NOT EXISTS "${_test_src}")
+        message(STATUS "test_targets: src/test.cpp not found, skipping")
+        return()
+    endif()
+
+    foreach(_linkage shared static)
+        set(_target ${_lower}_test_${_linkage})
+
+        add_executable(${_target} "${_test_src}")
+
+        target_include_directories(${_target}
+            PRIVATE
+                $<BUILD_INTERFACE:${_src_dir}/${_inc_dir}>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/${_inc_dir}>
+        )
+
+        if(NOT _hpp_only)
+            target_link_libraries(${_target} PRIVATE ${_lower}_${_linkage})
+            if("${_linkage}" STREQUAL "shared")
+                target_link_libraries(${_target} PRIVATE ${_lower}_static)
+            elseif("${_linkage}" STREQUAL "static")
+                if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+                    target_link_options(${_target} PRIVATE /MT)
+                else()
+                    target_link_options(${_target} PRIVATE -static)
+                endif()
+            endif()
+        endif()
+
+        apply_slim_compile_options(${_target})
+        target_compile_features(${_target} PRIVATE cxx_std_${SLIM_CXX_STANDARD})
+
+        add_custom_command(TARGET ${_target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Running ${_target}..."
+            COMMAND $<TARGET_FILE:${_target}>
+            COMMENT "Running ${_target}"
+        )
+
+        message(STATUS "test_targets: added target '${_target}'")
+    endforeach()
+endfunction()
+
+# ---------------------------------------------------------------------------
 # dump_target_properties(<TARGET>)
 # Prints all common target properties to STATUS output.
 # ---------------------------------------------------------------------------

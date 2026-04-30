@@ -14,6 +14,9 @@ include(SlimFunctions)
 define_module()
 generate_main_cpp()
 compile_targets()
+test_targets()
+
+
 
 # do not remove this foreach
 foreach(NAME IN LISTS MODULE_NAMES)
@@ -82,7 +85,6 @@ endforeach()
 # Do not rewrite below here
 return()
 
-include(RunMainTest)
 include(RunCatch2Tests)
 include(RunInstall)
 include(CMakePackageConfigHelpers)
