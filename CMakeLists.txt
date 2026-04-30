@@ -9,9 +9,9 @@ cmake_path(GET CMAKE_SOURCE_DIR FILENAME _project_name)
 project(${_project_name} LANGUAGES CXX)
 include(GNUInstallDirs)
 include(SlimFunctions)
-include(SlimModuleFunctions)
 
 define_module()
+generate_main_cpp()
 compile_targets()
 
 # do not remove this foreach
