@@ -5,25 +5,28 @@
 # For header-only modules only the generated .hpp is installed.
 # ---------------------------------------------------------------------------
 function(make_install_artifacts)
-    get_primary_module(_primary)
-    if(NOT _primary)
+    get_primary_module(_module_name)
+    if(NOT _module_name)
         message(FATAL_ERROR "make_install_artifacts: no primary module defined")
     endif()
 
-    meta_get(MODULE "${_primary}" header_file_in    _hdr_in)
-    meta_get(MODULE "${_primary}" header_file_out   _hdr_out)
-    meta_get(MODULE "${_primary}" metadata_file_in  _metadata_file_in)
-    meta_get(MODULE "${_primary}" metadata_file_out _metadata_file_out)
+    meta_get(MODULE "${_module_name}" description       _description)
+    meta_get(MODULE "${_module_name}" git_tag           _version)
+    meta_get(MODULE "${_module_name}" header_file_in    _hdr_in)
+    meta_get(MODULE "${_module_name}" header_file_out   _hdr_out)
+    meta_get(MODULE "${_module_name}" hpp_only          _hpp_only)
+    meta_get(MODULE "${_module_name}" lower             _library_name)
+    meta_get(MODULE "${_module_name}" metadata_file_in  _metadata_file_in)
+    meta_get(MODULE "${_module_name}" metadata_file_out _metadata_file_out)
 
     # --- Header -----------------------------------------------------------
     if(NOT _hdr_in)
-        message(FATAL_ERROR "make_install_artifacts: no header_file_in defined for '${_primary}'")
+        message(FATAL_ERROR "make_install_artifacts: no header_file_in defined for '${_module_name}'")
     endif()
 
     configure_file(
         "${CMAKE_SOURCE_DIR}/${_hdr_in}"
         "${CMAKE_CURRENT_BINARY_DIR}/${_hdr_out}"
-        @ONLY
     )
 
     # _hdr_out is e.g. "include/slim/SlimFoo.hpp" or
@@ -42,7 +45,6 @@ function(make_install_artifacts)
     configure_file(
         "${_metadata_file_in}"
         "${CMAKE_CURRENT_BINARY_DIR}/${_metadata_file_out}"
-        @ONLY
     )
 
     install(
@@ -50,7 +52,7 @@ function(make_install_artifacts)
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
     )
 
-    message(STATUS "make_install_artifacts: configured for '${_primary}'")
+    message(STATUS "make_install_artifacts: configured for '${_module_name}'")
 endfunction()
 
 # ---------------------------------------------------------------------------

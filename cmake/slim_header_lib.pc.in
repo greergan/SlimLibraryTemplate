@@ -1,10 +1,10 @@
 prefix=@CMAKE_INSTALL_PREFIX@
 exec_prefix=${prefix}
-includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
-libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/${CMAKE_INSTALL_INCLUDEDIR}
+libdir=${prefix}/${CMAKE_INSTALL_LIBDIR}
 
-Name: @SLIM_LIB@
-Description: @SLIM_LIB_DESCRIPTION@
-Version: @PROJECT_VERSION@
-Cflags: -I${includedir} -std=c++@SLIMLIB_CXX_STANDARD@
+Name: ${_module_name}
+Description: ${_description}
+Version: ${_version}
+Cflags: -I${includedir} -std=c++@SLIM_CXX_STANDARD@
 Libs:

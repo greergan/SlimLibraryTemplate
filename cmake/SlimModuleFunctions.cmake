@@ -130,14 +130,14 @@ function(_set_check_module NAME MIN_VERSION MAX_VERSION)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# set_dist_directory(<NAME>)
+# _set_dist_directory(<NAME>)
 # Sets dist_dir on the given module to a 'dist' directory that lives next
 # to the build directory.
 # ---------------------------------------------------------------------------
-function(set_dist_directory NAME)
+function(_set_dist_directory NAME)
     meta_get(MODULE "${NAME}" primary _is_primary)
     if(NOT _is_primary)
-        message(WARNING "set_dist_directory: '${NAME}' is not a primary module")
+        message(WARNING "_set_dist_directory: '${NAME}' is not a primary module")
         return()
     endif()
 
@@ -145,21 +145,22 @@ function(set_dist_directory NAME)
     meta_set(MODULE "${NAME}" dist_dir "${_build_parent}/dist")
     _propagate_module("${NAME}")
 
-    message(STATUS "set_dist_directory: ${NAME}.dist_dir=${_build_parent}/dist")
+    message(STATUS "_set_dist_directory: ${NAME}.dist_dir=${_build_parent}/dist")
 endfunction()
 
 # ---------------------------------------------------------------------------
 # _set_metadata_file(<NAME>)  [internal]
 # ---------------------------------------------------------------------------
 function(_set_metadata_file NAME)
-    meta_get(MODULE "${NAME}" lower _lower)
     meta_get(MODULE "${NAME}" hpp_only _hpp_only)
+    meta_get(MODULE "${NAME}" lower    _metadata_file_name)
+
     if(_hpp_only)
         meta_set(MODULE "${NAME}" metadata_file_in "cmake/slim_header_lib.pc.in")
     else()
         meta_set(MODULE "${NAME}" metadata_file_in "cmake/slim_common_lib.pc.in")
     endif()
-    meta_set(MODULE "${NAME}" metadata_file_out "${_lower}.pc")
+    meta_set(MODULE "${NAME}" metadata_file_out "${_metadata_file_name}.pc")
     _propagate_module("${NAME}")
 endfunction()
 
@@ -173,7 +174,7 @@ function(_set_module_headers NAME)
         # need to make sure that correct sub-module headers are collected
 
     elseif("${_type}" STREQUAL "SlimLib")
-        meta_set(MODULE "${NAME}" hpp_only        "ON")
+        meta_set(MODULE "${NAME}" hpp_only ON)
         set(_hdr_in "include/slim/${NAME}.hpp.in")
         string(REGEX REPLACE "\.in$" "" _hdr_out "${_hdr_in}")
         meta_set(MODULE "${NAME}" header_prefix   "${NAME}")
@@ -228,6 +229,27 @@ function(_set_package_info NAME)
     if(ARGC GREATER 2 AND NOT "${ARGV2}" STREQUAL "")
         meta_set(MODULE "${NAME}" max_version   "${ARGV2}")
     endif()
+    _propagate_module("${NAME}")
+endfunction()
+
+# ---------------------------------------------------------------------------
+# _set_project_description(<NAME> <DESCRIPTION>)
+# Sets the project description on the given module, with different handling
+# for hpp-only vs compiled modules. Fails if NAME is not provided.
+# ---------------------------------------------------------------------------
+function(_set_project_description NAME)
+    if("${NAME}" STREQUAL "")
+        message(FATAL_ERROR "_set_project_description: NAME must be provided.")
+    endif()
+
+    meta_get(MODULE "${NAME}" hpp_only _hpp_only)
+
+    if(_hpp_only)
+        meta_set(MODULE "${NAME}" description "${NAME} Header Only Library")
+    else()
+        meta_set(MODULE "${NAME}" description "${NAME} C++ Library")
+    endif()
+
     _propagate_module("${NAME}")
 endfunction()
 
@@ -299,11 +321,12 @@ function(define_module)
     # Re-entrant branch: compute and store all derived fields incrementally
     # ---------------------------------------------------------------------
     _set_package_info("${ARGV0}" ${ARGV1} ${ARGV2} ${ARGV3})
-    _set_metadata_file("${ARGV0}")
-    _set_module_headers("${ARGV0}")
-    _set_git_repo("${ARGV0}")
+    _set_module_headers("${ARGV0}") # keep this call high
     _set_check_module("${ARGV0}" "${ARGV1}" "${ARGV2}")
+    _set_git_repo("${ARGV0}")
+    _set_dist_directory("${ARGV0}")
+    _set_metadata_file("${ARGV0}")
+    _set_project_description("${ARGV0}")
     _set_source_info("${ARGV0}")
-    set_dist_directory("${ARGV0}")
     _propagate_module("${ARGV0}")
 endfunction()
