@@ -12,24 +12,11 @@ function(make_install_artifacts)
 
     include(CMakePackageConfigHelpers)
 
-    meta_get(MODULE "${_primary}" upper             _upper)
-    meta_get(MODULE "${_primary}" lower             _lower)
-    meta_get(MODULE "${_primary}" git_tag           _version)
-    meta_get(MODULE "${_primary}" hpp_only          _hpp_only)
     meta_get(MODULE "${_primary}" header_file_in    _hdr_in)
     meta_get(MODULE "${_primary}" header_file_out   _hdr_out)
-    meta_get(MODULE "${_primary}" include_dir       _inc_dir)
     meta_get(MODULE "${_primary}" src_dir           _src_dir)
     meta_get(MODULE "${_primary}" metadata_file_in  _metadata_file_in)
     meta_get(MODULE "${_primary}" metadata_file_out _metadata_file_out)
-    meta_get(MODULE "${_primary}" dist_dir          _dist_dir)
-
-    if(NOT _dist_dir)
-        message(FATAL_ERROR "make_install_artifacts: no dist_dir defined for '${_primary}'")
-    endif()
-
-    # --- Derive install sub-directory from include_dir --------------------
-    string(REGEX REPLACE "^include/" "" _install_dir "${_inc_dir}")
 
     # --- Header -----------------------------------------------------------
     if(NOT _hdr_in)
@@ -37,52 +24,19 @@ function(make_install_artifacts)
     endif()
 
     configure_file(
-        "${_src_dir}/${_hdr_in}"
-        "${_dist_dir}/${_hdr_out}"
+        "${CMAKE_SOURCE_DIR}/${_hdr_in}"
+        "${CMAKE_CURRENT_BINARY_DIR}/${_hdr_out}"
         @ONLY
     )
-    install(FILES "${_dist_dir}/${_hdr_out}"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${_install_dir}
-    )
-
-    # --- Export targets + CMake config files (compiled modules only) ------
-    if(NOT _hpp_only)
-        install(EXPORT ${_upper}Targets
-            FILE        ${_upper}Targets.cmake
-            NAMESPACE   Slim::
-            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_upper}
-        )
-
-        write_basic_package_version_file(
-            "${_dist_dir}/${_upper}ConfigVersion.cmake"
-            VERSION       ${_version}
-            COMPATIBILITY AnyNewerVersion
-        )
-
-        file(WRITE "${_dist_dir}/${_upper}Config.cmake"
-            "include(\"\${CMAKE_CURRENT_LIST_DIR}/${_upper}Targets.cmake\")\n"
-        )
-
-        install(FILES
-            "${_dist_dir}/${_upper}Config.cmake"
-            "${_dist_dir}/${_upper}ConfigVersion.cmake"
-            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_upper}
-        )
-    endif()
 
     # --- pkg-config metadata ----------------------------------------------
     configure_file(
-        "${_src_dir}/${_metadata_file_in}"
-        "${_dist_dir}/${_metadata_file_out}"
+        "${_metadata_file_in}"
+        "${CMAKE_CURRENT_BINARY_DIR}/${_metadata_file_out}"
         @ONLY
     )
 
-    install(FILES
-        "${_dist_dir}/${_metadata_file_out}"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
-    )
-
-    message(STATUS "make_install_artifacts: configured for '${_upper}'")
+    message(STATUS "make_install_artifacts: configured for '${_primary}'")
 endfunction()
 
 # ---------------------------------------------------------------------------

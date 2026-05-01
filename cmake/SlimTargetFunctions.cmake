@@ -50,35 +50,11 @@ function(compile_targets)
         VERSION     ${_version}
         SOVERSION   ${_version_major}
     )
-    add_custom_command(TARGET ${_lower}_shared POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "Shared lib: $<TARGET_FILE_NAME:${_lower}_shared>"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${_dist_dir}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:${_lower}_shared>
-            "${_dist_dir}/$<TARGET_FILE_NAME:${_lower}_shared>"
-        # soname symlink: libfoo.so.1 -> libfoo.so.1.2.3
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            $<TARGET_FILE_NAME:${_lower}_shared>
-            "${_dist_dir}/$<TARGET_SONAME_FILE_NAME:${_lower}_shared>"
-        # linker symlink: libfoo.so -> libfoo.so.1.2.3
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            $<TARGET_FILE_NAME:${_lower}_shared>
-            "${_dist_dir}/$<TARGET_LINKER_FILE_NAME:${_lower}_shared>"
-    )
-
     # --- Static library ---------------------------------------------------
     add_library(${_lower}_static STATIC "${_src}")
     set_target_properties(${_lower}_static PROPERTIES
         OUTPUT_NAME ${_lower}
     )
-    add_custom_command(TARGET ${_lower}_static POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "Static lib: $<TARGET_FILE_NAME:${_lower}_static>"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${_dist_dir}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:${_lower}_static>
-            "${_dist_dir}/$<TARGET_FILE_NAME:${_lower}_static>"
-    )
-
     # --- Common target settings -------------------------------------------
     foreach(_target ${_lower}_shared ${_lower}_static)
         target_include_directories(${_target}
