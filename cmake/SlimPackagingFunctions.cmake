@@ -153,13 +153,4 @@ function(make_packages)
 
     include(CPack)
 
-    add_custom_target(dist
-        COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${_dist_dir}"
-        COMMAND ${CMAKE_CPACK_COMMAND} --config "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Installing and building distribution packages for '${_lower}'"
-        VERBATIM
-    )
-
-    message(STATUS "make_packages: added target 'dist'")
 endfunction()
