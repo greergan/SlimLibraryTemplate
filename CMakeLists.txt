@@ -18,6 +18,10 @@ test_targets()
 test_catch2_targets()
 make_install_artifacts()
 make_packages()
+include(CPack)  # MUST be at directory scope — make_packages() propagates all
+                # CPACK_* vars via PARENT_SCOPE so they are visible here.
+                # Calling include(CPack) inside a function() causes CPACK_GENERATOR
+                # and CPACK_OUTPUT_FILE_PREFIX to be lost, producing empty packages.
 
 # do not remove this foreach
 foreach(NAME IN LISTS MODULE_NAMES)

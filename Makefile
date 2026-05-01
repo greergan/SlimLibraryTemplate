@@ -37,12 +37,12 @@ configure:
 		-DSLIM_USE_LOCAL_SOURCE=$(LOCAL_SRC)
 
 build: configure
-	$(CMAKE) --build $(BUILD_DIR)
+	$(CMAKE) --build $(BUILD_DIR) --target dist
 
 install:
 	@if [ "$(IS_DEBIAN)" = "yes" ]; then \
 		$(MAKE) LOCAL_SRC=OFF deb; \
-		PKG=$$(ls -1t build/*.deb 2>/dev/null | sort --reverse | head -n 1); \
+		PKG=$$(ls -1t dist/*.deb 2>/dev/null | sort --reverse | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
 			dpkg -i "$$PKG"; \
@@ -52,7 +52,7 @@ install:
 		fi; \
 	elif [ "$(IS_REDHAT)" = "yes" ]; then \
 		$(MAKE) LOCAL_SRC=OFF rpm; \
-		PKG=$$(ls build/*.rpm 2>/dev/null | sort --reverse | head -n 1); \
+		PKG=$$(ls dist/*.rpm 2>/dev/null | sort --reverse | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
 			rpm -i "$$PKG"; \

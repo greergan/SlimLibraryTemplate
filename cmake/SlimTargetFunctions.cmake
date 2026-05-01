@@ -63,7 +63,7 @@ function(compile_targets)
                 $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/${_inc_dir}>
                 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         )
-		message(STATUS "Applying compile options to ${_target}")
+        message(STATUS "Applying compile options to ${_target}")
         apply_slim_compile_options(${_target})
         target_compile_features(${_target} PUBLIC cxx_std_${SLIM_CXX_STANDARD})
     endforeach()
@@ -71,7 +71,9 @@ function(compile_targets)
     # --- Alias ------------------------------------------------------------
     add_library(${_lower} ALIAS ${_lower}_shared)
 
-    # --- Install ----------------------------------------------------------
+    # --- Install libraries ------------------------------------------------
+    # Header and .pc installs are handled by make_install_artifacts(), which
+    # has visibility into the exact configure_file() output paths.
     meta_get(MODULE "${_primary}" upper _upper)
     install(TARGETS ${_lower}_shared ${_lower}_static
         EXPORT ${_upper}Targets

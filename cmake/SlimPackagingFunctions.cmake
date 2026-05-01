@@ -10,11 +10,8 @@ function(make_install_artifacts)
         message(FATAL_ERROR "make_install_artifacts: no primary module defined")
     endif()
 
-    include(CMakePackageConfigHelpers)
-
     meta_get(MODULE "${_primary}" header_file_in    _hdr_in)
     meta_get(MODULE "${_primary}" header_file_out   _hdr_out)
-    meta_get(MODULE "${_primary}" src_dir           _src_dir)
     meta_get(MODULE "${_primary}" metadata_file_in  _metadata_file_in)
     meta_get(MODULE "${_primary}" metadata_file_out _metadata_file_out)
 
@@ -29,6 +26,18 @@ function(make_install_artifacts)
         @ONLY
     )
 
+    # _hdr_out is e.g. "include/slim/SlimFoo.hpp" or
+    # "include/slim/common/bar/baz.h".  Strip the leading "include/" segment
+    # so the final installed path is:
+    #   <prefix>/<CMAKE_INSTALL_INCLUDEDIR>/slim/SlimFoo.hpp
+    cmake_path(GET _hdr_out PARENT_PATH _hdr_install_subdir)
+    string(REGEX REPLACE "^include/" "" _hdr_install_subdir "${_hdr_install_subdir}")
+
+    install(
+        FILES "${CMAKE_CURRENT_BINARY_DIR}/${_hdr_out}"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${_hdr_install_subdir}"
+    )
+
     # --- pkg-config metadata ----------------------------------------------
     configure_file(
         "${_metadata_file_in}"
@@ -36,14 +45,24 @@ function(make_install_artifacts)
         @ONLY
     )
 
+    install(
+        FILES "${CMAKE_CURRENT_BINARY_DIR}/${_metadata_file_out}"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+    )
+
     message(STATUS "make_install_artifacts: configured for '${_primary}'")
 endfunction()
 
 # ---------------------------------------------------------------------------
 # make_packages()
-# Configures CPack and creates a 'dist' custom target that produces DEB and
-# RPM packages. All CPack variables follow the logic from RunPackager.cmake.
-# Requires install_targets() to have been called first.
+# Prepares all CPACK_* variables and propagates them to the calling directory
+# scope. The caller (CMakeLists.txt) MUST call include(CPack) immediately
+# after this function returns — include(CPack) must run at directory scope
+# or CPACK_GENERATOR and CPACK_OUTPUT_FILE_PREFIX will not be captured
+# correctly in the generated CPackConfig.cmake.
+#
+# Also registers a 'dist' custom target that invokes cpack to produce
+# .deb / .rpm packages in the module's dist_dir.
 # ---------------------------------------------------------------------------
 function(make_packages)
     get_primary_module(_primary)
@@ -55,12 +74,15 @@ function(make_packages)
     meta_get(MODULE "${_primary}" git_tag     _version)
     meta_get(MODULE "${_primary}" upper       _upper)
     meta_get(MODULE "${_primary}" dist_dir    _dist_dir)
+    meta_get(MODULE "${_primary}" description _description)
 
     if(NOT _dist_dir)
         message(FATAL_ERROR "make_packages: no dist_dir defined for '${_primary}'")
     endif()
 
-    # --- Architecture ---------------------------------------------------------
+    file(MAKE_DIRECTORY "${_dist_dir}")
+
+    # --- Architecture -----------------------------------------------------
     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _arch)
     if(_arch MATCHES "x86_64|amd64")
         set(_arch_name "amd64")
@@ -74,37 +96,58 @@ function(make_packages)
         set(_arch_name "unknown")
     endif()
 
-    # --- Align install prefix with CPack packaging prefix -----------------
+    # Forces /usr so installed paths inside the package are correct.
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "" FORCE)
 
-    # --- CPack common -----------------------------------------------------
-    set(CPACK_GENERATOR "DEB;RPM")
-    set(CPACK_PACKAGE_NAME              ${_lower})
-    set(CPACK_PACKAGE_VERSION           ${_version})
-    set(CPACK_PACKAGE_CONTACT           "${GIT_USER_NAME} <${GIT_USER_EMAIL}>")
-    set(CPACK_PACKAGE_FILE_NAME         "${_lower}-${_version}-${_arch_name}")
-    set(CPACK_PACKAGING_INSTALL_PREFIX  "/usr")
+    # -----------------------------------------------------------------------
+    # Propagate every CPACK_* variable to the parent (directory) scope.
+    # include(CPack) must be called at directory scope by CMakeLists.txt
+    # immediately after this function returns — variables set inside a
+    # function() are invisible to include(CPack) if called here.
+    # -----------------------------------------------------------------------
+    set(CPACK_GENERATOR                  "DEB;RPM"                                              PARENT_SCOPE)
+    set(CPACK_PACKAGE_NAME               "${_lower}"                                            PARENT_SCOPE)
+    set(CPACK_PACKAGE_VERSION            "${_version}"                                          PARENT_SCOPE)
+    set(CPACK_PACKAGE_CONTACT            "${GIT_USER_NAME} <${GIT_USER_EMAIL}>"                 PARENT_SCOPE)
+    set(CPACK_PACKAGE_FILE_NAME          "${_lower}-${_version}-${_arch_name}"                  PARENT_SCOPE)
+    set(CPACK_PACKAGING_INSTALL_PREFIX   "/usr"                                                 PARENT_SCOPE)
+    set(CPACK_OUTPUT_FILE_PREFIX         "${_dist_dir}"                                         PARENT_SCOPE)
+    set(CPACK_INSTALL_CMAKE_PROJECTS     "${CMAKE_BINARY_DIR};${PROJECT_NAME};ALL;/"            PARENT_SCOPE)
 
-    # --- DEB --------------------------------------------------------------
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER  ${GIT_USER_NAME})
-    set(CPACK_DEBIAN_PACKAGE_SECTION     "devel")
-    set(CPACK_DEBIAN_PACKAGE_PRIORITY    "optional")
-    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE ${_arch_name})
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER  "${GIT_USER_NAME}"                                    PARENT_SCOPE)
+    set(CPACK_DEBIAN_PACKAGE_SECTION     "devel"                                                PARENT_SCOPE)
+    set(CPACK_DEBIAN_PACKAGE_PRIORITY    "optional"                                             PARENT_SCOPE)
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "${_arch_name}"                                       PARENT_SCOPE)
+    set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${_description}"                                      PARENT_SCOPE)
 
-    # --- RPM --------------------------------------------------------------
-    set(CPACK_RPM_PACKAGE_NAME         ${_lower})
-    set(CPACK_RPM_PACKAGE_VERSION      ${_version})
-    set(CPACK_RPM_PACKAGE_RELEASE      "1")
-    set(CPACK_RPM_PACKAGE_LICENSE      "MIT")
-    set(CPACK_RPM_PACKAGE_GROUP        "Development/Libraries")
-    set(CPACK_RPM_PACKAGE_ARCHITECTURE ${_arch_name})
-    set(CPACK_RPM_PACKAGE_PREFIX       ${CMAKE_INSTALL_PREFIX})
+    set(CPACK_RPM_PACKAGE_NAME           "${_lower}"                                            PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_VERSION        "${_version}"                                          PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_RELEASE        "1"                                                    PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_LICENSE        "MIT"                                                  PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_GROUP          "Development/Libraries"                                PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_ARCHITECTURE   "${_arch_name}"                                        PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_PREFIX         "/usr"                                                 PARENT_SCOPE)
+    set(CPACK_RPM_PACKAGE_SUMMARY        "${_description}"                                      PARENT_SCOPE)
 
-    meta_get(MODULE "${_primary}" description _description)
-    if(_description)
-        set(CPACK_RPM_PACKAGE_SUMMARY ${_description})
+    # --- 'dist' target ---------------------------------------------------
+    # CPack re-runs cmake_install.cmake internally into its own DESTDIR
+    # staging tree, then packs it.
+    add_custom_target(dist
+        COMMAND "${CMAKE_CPACK_COMMAND}"
+                --config  "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
+                -B        "${_dist_dir}"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+        COMMENT "Building DEB and RPM packages into ${_dist_dir}"
+        VERBATIM
+    )
+
+    if(TARGET ${_lower}_shared)
+        add_dependencies(dist ${_lower}_shared)
+    endif()
+    if(TARGET ${_lower}_static)
+        add_dependencies(dist ${_lower}_static)
     endif()
 
-    include(CPack)
-
+    message(STATUS "make_packages: 'dist' target will write packages to '${_dist_dir}'")
+    message(STATUS "make_packages: call include(CPack) at directory scope immediately after this function")
 endfunction()
