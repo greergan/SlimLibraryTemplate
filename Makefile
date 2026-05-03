@@ -25,7 +25,7 @@ else
 	ARCH := unknown
 endif
 
-.PHONY: all configure build install test deb rpm packages clean
+.PHONY: all configure build install local test deb rpm packages clean
 
 all: build
 
@@ -53,6 +53,32 @@ install:
 	elif [ "$(IS_REDHAT)" = "yes" ]; then \
 		$(MAKE) LOCAL_SRC=OFF rpm; \
 		PKG=$$(ls dist/*.rpm 2>/dev/null | sort --reverse | head -n 1); \
+		if [ -n "$$PKG" ]; then \
+			echo "Installing $$PKG"; \
+			rpm -i "$$PKG"; \
+		else \
+			echo "No .rpm produced"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "Unsupported platform"; \
+		exit 1; \
+	fi;
+
+local:
+	@if [ "$(IS_DEBIAN)" = "yes" ]; then \
+		$(MAKE) LOCAL_SRC=ON deb; \
+		PKG=$$(ls -1t dist/*0.0.0*.deb 2>/dev/null | sort --reverse | head -n 1); \
+		if [ -n "$$PKG" ]; then \
+			echo "Installing $$PKG"; \
+			dpkg -i "$$PKG"; \
+		else \
+			echo "No .deb produced"; \
+			exit 1; \
+		fi; \
+	elif [ "$(IS_REDHAT)" = "yes" ]; then \
+		$(MAKE) LOCAL_SRC=ON rpm; \
+		PKG=$$(ls dist/*0.0.0*.rpm 2>/dev/null | sort --reverse | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
 			rpm -i "$$PKG"; \
