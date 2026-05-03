@@ -110,11 +110,13 @@ function(test_targets)
         return()
     endif()
 
-    if(NOT _hpp_only)
-        message(STATUS "test_targets: library target properties before compilation:")
-        dump_target_properties(${_lower}_shared)
-        dump_target_properties(${_lower}_static)
-    endif()
+#    if(NOT _hpp_only)
+#        message(STATUS "test_targets: library target properties before compilation:")
+#        dump_target_properties(${_lower}_shared)
+#        dump_target_properties(${_lower}_static)
+#    endif()
+
+    enable_testing()
 
     foreach(_linkage shared static)
         set(_target ${_lower}_test_${_linkage})
@@ -148,7 +150,7 @@ function(test_targets)
             COMMAND $<TARGET_FILE:${_target}>
             COMMENT "Running ${_target}"
         )
-
+        add_test(NAME ${_target} COMMAND $<TARGET_FILE:${_target}>)
         message(STATUS "test_targets: added target '${_target}'")
     endforeach()
 endfunction()

@@ -135,13 +135,29 @@ function(make_packages)
     # CPack re-runs cmake_install.cmake internally into its own DESTDIR
     # staging tree, then packs it.
     add_custom_target(dist
+        COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
         COMMAND "${CMAKE_CPACK_COMMAND}"
                 --config  "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
                 -B        "${_dist_dir}"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-        COMMENT "Building DEB and RPM packages into ${_dist_dir}"
+        COMMENT "Running tests then building DEB and RPM packages into ${_dist_dir}"
         VERBATIM
     )
+#    add_custom_target(dist
+#        COMMAND "${CMAKE_CPACK_COMMAND}"
+#                --config  "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
+#                -B        "${_dist_dir}"
+#        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+#        COMMENT "Building DEB and RPM packages into ${_dist_dir}"
+#        VERBATIM
+#    )
+
+    if(TARGET ${_lower}_test_shared)
+        add_dependencies(dist ${_lower}_test_shared)
+    endif()
+    if(TARGET ${_lower}_test_static)
+        add_dependencies(dist ${_lower}_test_static)
+    endif()
 
     if(TARGET ${_lower}_shared)
         add_dependencies(dist ${_lower}_shared)
