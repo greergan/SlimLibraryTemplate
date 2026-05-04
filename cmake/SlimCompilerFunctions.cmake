@@ -1,6 +1,8 @@
 function(set_compiler_flags)
+    set(flags "")
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-        list(APPEND SLIM_CXX_FLAGS
+        list(APPEND flags
             -Wall
             -Wextra
             -Wpedantic
@@ -9,27 +11,31 @@ function(set_compiler_flags)
             -Wsign-conversion
         )
         if(CMAKE_BUILD_TYPE STREQUAL "RELEASE")
-            list(APPEND SLIM_CXX_FLAGS -O2 -DNDEBUG)
+            list(APPEND flags -O2 -DNDEBUG)
         elseif(CMAKE_BUILD_TYPE STREQUAL "COMPACT")
-            list(APPEND SLIM_CXX_FLAGS -O3)
+            list(APPEND flags -O3)
         elseif(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-            list(APPEND SLIM_CXX_FLAGS -g -O0)
+            list(APPEND flags -g -O0)
         endif()
+
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        list(APPEND SLIM_CXX_FLAGS
+        list(APPEND flags
             /W4
             /WX-
             /permissive-
         )
         if(CMAKE_BUILD_TYPE STREQUAL "RELEASE")
-            list(APPEND SLIM_CXX_FLAGS /O2 /DNDEBUG)
+            list(APPEND flags /O2 /DNDEBUG)
         elseif(CMAKE_BUILD_TYPE STREQUAL "COMPACT")
-            list(APPEND SLIM_CXX_FLAGS /O1 /DNDEBUG)
+            list(APPEND flags /O1 /DNDEBUG)
         elseif(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-            list(APPEND SLIM_CXX_FLAGS /Od /Zi)
+            list(APPEND flags /Od /Zi)
         endif()
+
     else()
         message(WARNING "Unknown compiler '${CMAKE_CXX_COMPILER_ID}' — no flags set")
     endif()
-    list(APPEND SLIM_CXX_FLAGS ${SLIM_CXX_STANDARD})
+
+    list(APPEND flags ${DEFAULT_CXX_FLAG})
+    set(SLIM_CXX_FLAGS "${flags}" PARENT_SCOPE)  # propagate to caller
 endfunction()
