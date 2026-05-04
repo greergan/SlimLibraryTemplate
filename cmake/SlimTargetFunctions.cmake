@@ -173,8 +173,6 @@ endfunction()
 # module's source tree, and wires them up with CTest and catch_discover_tests.
 # Mirrors the primary module's include directories and compile options.
 # Runs the test executable as a POST_BUILD step.
-# When SLIM_USE_LOCAL_SOURCE is ON links against the shared library instead
-# of the static library.
 # ---------------------------------------------------------------------------
 function(test_catch2_targets)
     get_primary_module(_primary)
@@ -236,8 +234,7 @@ function(test_catch2_targets)
     target_link_libraries(${_lower}_catch2_tests PRIVATE Catch2::Catch2WithMain)
 
     include(CTest)
-    include(Catch)
-    catch_discover_tests(${_lower}_catch2_tests)
+    add_test(NAME ${_lower}_catch2_tests COMMAND $<TARGET_FILE:${_lower}_catch2_tests>)
 
     add_custom_command(TARGET ${_lower}_catch2_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Running ${_lower}_catch2_tests..."

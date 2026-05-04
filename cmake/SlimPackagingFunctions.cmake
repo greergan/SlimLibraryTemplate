@@ -143,18 +143,15 @@ function(make_packages)
         COMMENT "Running tests then building DEB and RPM packages into ${_dist_dir}"
         VERBATIM
     )
-#    add_custom_target(dist
-#        COMMAND "${CMAKE_CPACK_COMMAND}"
-#                --config  "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
-#                -B        "${_dist_dir}"
-#        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-#        COMMENT "Building DEB and RPM packages into ${_dist_dir}"
-#        VERBATIM
-#    )
+
+    if(TARGET ${_lower}_catch2_tests)
+        add_dependencies(dist ${_lower}_catch2_tests)
+    endif()
 
     if(TARGET ${_lower}_test_shared)
         add_dependencies(dist ${_lower}_test_shared)
     endif()
+
     if(TARGET ${_lower}_test_static)
         add_dependencies(dist ${_lower}_test_static)
     endif()
@@ -162,6 +159,7 @@ function(make_packages)
     if(TARGET ${_lower}_shared)
         add_dependencies(dist ${_lower}_shared)
     endif()
+
     if(TARGET ${_lower}_static)
         add_dependencies(dist ${_lower}_static)
     endif()
