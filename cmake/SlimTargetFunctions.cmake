@@ -39,6 +39,13 @@ function(compile_targets)
         message(FATAL_ERROR "setup_slim_library_targets: source not found '${_src}'")
     endif()
 
+    # Collect all sources: main.cpp + any extra sources
+    set(_all_sources "${_src}")
+    if(SLIM_COMMON_EXTRA_SOURCES)
+        list(APPEND _all_sources ${SLIM_COMMON_EXTRA_SOURCES})
+        message(STATUS "compile_targets: extra sources appended: ${SLIM_COMMON_EXTRA_SOURCES}")
+    endif()
+
     # --- Version components -----------------------------------------------
     string(REGEX MATCH "^([0-9]+)" _ "${_version}")
     set(_version_major "${CMAKE_MATCH_1}")
@@ -54,14 +61,14 @@ function(compile_targets)
         set(_target ${_lower}_${_linkage})
 
         if("${_linkage}" STREQUAL "shared")
-            add_library(${_target} SHARED "${_src}")
+            add_library(${_target} SHARED ${_all_sources})
             set_target_properties(${_target} PROPERTIES
                 OUTPUT_NAME ${_lower}
                 VERSION     ${_version}
                 SOVERSION   ${_version_major}
             )
         else()
-            add_library(${_target} STATIC "${_src}")
+            add_library(${_target} STATIC ${_all_sources})
             set_target_properties(${_target} PROPERTIES
                 OUTPUT_NAME ${_lower}
             )

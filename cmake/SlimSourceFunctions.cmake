@@ -9,14 +9,11 @@ function(generate_main_cpp)
         return()
     endif()
 
-    if(NOT SLIM_USE_LOCAL_SOURCE)
-        message(STATUS "generate_main_cpp: skipped (SLIM_USE_LOCAL_SOURCE is OFF)")
-        return()
-    endif()
-
     meta_get(MODULE "${_primary}" src_dir _src_dir)
 
     set(_includes "")
+    set(_extra_sources "")
+
     foreach(_name IN LISTS MODULE_NAMES)
         meta_get(MODULE "${_name}" primary _is_primary)
         if(_is_primary)
@@ -31,6 +28,22 @@ function(generate_main_cpp)
 
         string(REGEX REPLACE "^include/" "" _hdr_rel "${_hdr}")
         list(APPEND _includes "#include <${_hdr_rel}>")
+
+        # --- Collect sub-module main.cpp when building from remote -------
+        if(NOT SLIM_USE_LOCAL_SOURCE)
+            meta_get(MODULE "${_name}" src_dir _sub_src_dir)
+            if(_sub_src_dir)
+                set(_sub_main "${_sub_src_dir}/src/main.cpp")
+                if(EXISTS "${_sub_main}")
+                    list(APPEND _extra_sources "${_sub_main}")
+                    message(STATUS "generate_main_cpp: found sub-module source '${_sub_main}'")
+                else()
+                    message(WARNING "generate_main_cpp: no src/main.cpp for '${_name}' at '${_sub_main}', skipping")
+                endif()
+            else()
+                message(WARNING "generate_main_cpp: module '${_name}' has no src_dir, skipping source collection")
+            endif()
+        endif()
     endforeach()
 
     if(NOT _includes)
@@ -56,8 +69,8 @@ function(generate_main_cpp)
 \n\
 ${_includes_block}\n\
 \n\
-#define ${_module}_VERSION \"${_git_tag}\"\n\
-#define ${_module}_GIT_HASH \"${_git_hash}\"\n\
+#define ${_module}_VERSION \"@${_module}_VERSION@\"\n\
+#define ${_module}_GIT_HASH \"@${_module}_GIT_HASH@\"\n\
 \n\
 #endif // SLIM__COMMON__H\n")
 
@@ -69,6 +82,17 @@ ${_includes_block}\n\
     set(_out_src "${_src_dir}/src/main.cpp")
     file(WRITE "${_out_src}" "${_includes_block}\n")
     message(STATUS "generate_main_cpp: wrote ${_out_src}")
+
+    # --- Propagate extra sources to parent scope (remote build only) -----
+    if(NOT SLIM_USE_LOCAL_SOURCE)
+        if(_extra_sources)
+            set(SLIM_COMMON_EXTRA_SOURCES "${_extra_sources}" PARENT_SCOPE)
+            message(STATUS "generate_main_cpp: propagating ${_extra_sources} as SLIM_COMMON_EXTRA_SOURCES")
+        else()
+            message(WARNING "generate_main_cpp: no sub-module main.cpp files found")
+        endif()
+        return()  # skip commit logic when using remote source
+    endif()
 
     # --- Optionally git commit the generated files ------------------------
     find_program(_GIT_EXEC git)

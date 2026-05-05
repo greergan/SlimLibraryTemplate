@@ -13,34 +13,67 @@ function(make_install_artifacts)
     meta_get(MODULE "${_module_name}" description       _description)
     meta_get(MODULE "${_module_name}" git_tag           _version)
     meta_get(MODULE "${_module_name}" git_repo          _git_repo)
-    meta_get(MODULE "${_module_name}" header_file_in    _hdr_in)
-    meta_get(MODULE "${_module_name}" header_file_out   _hdr_out)
     meta_get(MODULE "${_module_name}" hpp_only          _hpp_only)
     meta_get(MODULE "${_module_name}" lower             _library_name)
     meta_get(MODULE "${_module_name}" metadata_file_in  _metadata_file_in)
     meta_get(MODULE "${_module_name}" metadata_file_out _metadata_file_out)
 
-    # --- Header -----------------------------------------------------------
-    if(NOT _hdr_in)
-        message(FATAL_ERROR "make_install_artifacts: no header_file_in defined for '${_module_name}'")
-    endif()
+    # --- Headers (primary + all sub-modules) --------------------------------
+    # Stage configured headers under a dedicated subdirectory so they are
+    # isolated from other generated files in the binary directory.
+    set(_hdr_staging "${CMAKE_CURRENT_BINARY_DIR}/include_staging")
 
-    configure_file(
-        "${CMAKE_SOURCE_DIR}/${_hdr_in}"
-        "${CMAKE_CURRENT_BINARY_DIR}/${_hdr_out}"
-    )
+    foreach(_name IN LISTS MODULE_NAMES)
+        meta_get(MODULE "${_name}" header_file_in  _hdr_in)
+        meta_get(MODULE "${_name}" header_file_out _hdr_out)
+        meta_get(MODULE "${_name}" git_tag         _git_tag)
+        meta_get(MODULE "${_name}" git_hash        _git_hash)
+        meta_get(MODULE "${_name}" upper           _module)
+        meta_get(MODULE "${_name}" src_dir         _src_dir)
 
-    # _hdr_out is e.g. "include/slim/SlimFoo.hpp" or
-    # "include/slim/common/bar/baz.h".  Strip the leading "include/" segment
-    # so the final installed path is:
-    #   <prefix>/<CMAKE_INSTALL_INCLUDEDIR>/slim/SlimFoo.hpp
-    cmake_path(GET _hdr_out PARENT_PATH _hdr_install_subdir)
-    string(REGEX REPLACE "^include/" "" _hdr_install_subdir "${_hdr_install_subdir}")
+        if(NOT _hdr_in)
+            message(FATAL_ERROR "make_install_artifacts: no header_file_in defined for '${_name}'")
+        endif()
 
-    install(
-        FILES "${CMAKE_CURRENT_BINARY_DIR}/${_hdr_out}"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${_hdr_install_subdir}"
-    )
+        # For sub-modules, header_file_in is relative to their own src_dir.
+        # For the primary module, fall back to CMAKE_SOURCE_DIR.
+        if(_src_dir)
+            set(_hdr_in_path "${_src_dir}/${_hdr_in}")
+        else()
+            set(_hdr_in_path "${CMAKE_SOURCE_DIR}/${_hdr_in}")
+        endif()
+
+        if(NOT EXISTS "${_hdr_in_path}")
+            message(FATAL_ERROR "make_install_artifacts: header_file_in not found: '${_hdr_in_path}'")
+        endif()
+
+        # Variables substituted into the header template:
+        #   @SLIMFOO_VERSION@  and  @SLIMFOO_GIT_HASH@
+        set(${_module}_VERSION  "${_git_tag}")
+        set(${_module}_GIT_HASH "${_git_hash}")
+
+        message(STATUS "make_install_artifacts: ${_module}_VERSION  = ${${_module}_VERSION}")
+        message(STATUS "make_install_artifacts: ${_module}_GIT_HASH = ${${_module}_GIT_HASH}")
+
+        configure_file(
+            "${_hdr_in_path}"
+            "${_hdr_staging}/${_hdr_out}"
+        )
+
+        # _hdr_out is e.g. "include/slim/SlimFoo.hpp" or
+        # "include/slim/common/bar/baz.h".  Strip the leading "include/" segment
+        # so the final installed path is:
+        #   <prefix>/<CMAKE_INSTALL_INCLUDEDIR>/slim/SlimFoo.hpp
+        cmake_path(GET _hdr_out PARENT_PATH _hdr_install_subdir)
+        string(REGEX REPLACE "^include/" "" _hdr_install_subdir "${_hdr_install_subdir}")
+
+        install(
+            FILES "${_hdr_staging}/${_hdr_out}"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${_hdr_install_subdir}"
+        )
+
+        message(STATUS "make_install_artifacts: header configured for '${_name}'")
+    endforeach()
 
     # --- pkg-config metadata ----------------------------------------------
     # @ONLY is required: the .pc template intentionally contains pkg-config
