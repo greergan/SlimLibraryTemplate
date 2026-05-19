@@ -10,6 +10,10 @@ function(make_install_artifacts)
         message(FATAL_ERROR "make_install_artifacts: no primary module defined")
     endif()
 
+    meta_get(MODULE "${_module_name}" lower       _library_name)
+    meta_get(MODULE "${_module_name}" git_repo    _git_repo)
+    meta_get(MODULE "${_module_name}" git_tag     _version)
+    meta_get(MODULE "${_module_name}" description _description)
     meta_get(MODULE "${_module_name}" metadata_file_in  _metadata_file_in)
     meta_get(MODULE "${_module_name}" metadata_file_out _metadata_file_out)
 
