@@ -10,7 +10,6 @@ endfunction()
 
 # ---------------------------------------------------------------------------
 # compile_targets()
-# Derives all target information from the primary module's metadata.
 # ---------------------------------------------------------------------------
 function(compile_targets)
     get_primary_module(_primary)
@@ -18,23 +17,17 @@ function(compile_targets)
         message(FATAL_ERROR "compile_targets: no primary module defined")
     endif()
 
-    meta_get(MODULE "${_primary}" lower          _lower)
-    meta_get(MODULE "${_primary}" git_tag        _version)
-    meta_get(MODULE "${_primary}" src_dir        _src_dir)
-    meta_get(MODULE "${_primary}" include_dir    _inc_dir)
-    meta_get(MODULE "${_primary}" hpp_only       _hpp_only)
-    meta_get(MODULE "${_primary}" dist_dir       _dist_dir)
-
-    if(NOT _dist_dir)
-        message(FATAL_ERROR "compile_targets: no dist_dir defined for '${_primary}'")
-    endif()
+    meta_get(MODULE "${_primary}" git_tag  _version)
+    meta_get(MODULE "${_primary}" hpp_only _hpp_only)
+    meta_get(MODULE "${_primary}" lower    _lower)
+    meta_get(MODULE "${_primary}" upper    _upper)
 
     if(_hpp_only)
         message(STATUS "Library targets: header-only, skipping shared/static build")
         return()
     endif()
 
-    set(_src "${_src_dir}/src/main.cpp")
+    set(_src "${CMAKE_SOURCE_DIR}/src/main.cpp")
     if(NOT EXISTS "${_src}")
         message(FATAL_ERROR "setup_slim_library_targets: source not found '${_src}'")
     endif()
@@ -46,17 +39,10 @@ function(compile_targets)
         message(STATUS "compile_targets: extra sources appended: ${SLIM_COMMON_EXTRA_SOURCES}")
     endif()
 
-    # --- Version components -----------------------------------------------
     string(REGEX MATCH "^([0-9]+)" _ "${_version}")
     set(_version_major "${CMAKE_MATCH_1}")
 
-    # --- Build targets (static omitted when using local source) -----------
-    set(_linkages shared)
-    if(NOT SLIM_USE_LOCAL_SOURCE)
-        list(APPEND _linkages static)
-    endif()
-
-    meta_get(MODULE "${_primary}" upper _upper)
+    set(_linkages shared static)
     foreach(_linkage ${_linkages})
         set(_target ${_lower}_${_linkage})
 
@@ -74,10 +60,9 @@ function(compile_targets)
             )
         endif()
 
-        message(STATUS "compile_targets: include_dir='${_inc_dir}'")
         target_include_directories(${_target}
             PUBLIC
-                $<BUILD_INTERFACE:${_src_dir}/include>
+                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
                 $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
                 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         )
@@ -107,7 +92,6 @@ endfunction()
 # test_static is fully statically linked against the static library (-static /
 # /MT). Both mirror the primary module's include directories and compile
 # options, and are run as a POST_BUILD step.
-# When SLIM_USE_LOCAL_SOURCE is ON only the shared linkage is built.
 # ---------------------------------------------------------------------------
 function(test_targets)
     get_primary_module(_primary)
@@ -115,12 +99,10 @@ function(test_targets)
         message(FATAL_ERROR "test_targets: no primary module defined")
     endif()
 
-    meta_get(MODULE "${_primary}" lower       _lower)
-    meta_get(MODULE "${_primary}" src_dir     _src_dir)
-    meta_get(MODULE "${_primary}" include_dir _inc_dir)
     meta_get(MODULE "${_primary}" hpp_only    _hpp_only)
+    meta_get(MODULE "${_primary}" lower       _lower)
 
-    set(_test_src "${_src_dir}/src/test.cpp")
+    set(_test_src "${CMAKE_SOURCE_DIR}/src/test.cpp")
     if(NOT EXISTS "${_test_src}")
         message(STATUS "test_targets: src/test.cpp not found, skipping")
         return()
@@ -128,19 +110,15 @@ function(test_targets)
 
     enable_testing()
 
-    set(_linkages shared)
-    if(NOT SLIM_USE_LOCAL_SOURCE)
-        list(APPEND _linkages static)
-    endif()
+    set(_linkages shared static)
     foreach(_linkage ${_linkages})
         set(_target ${_lower}_test_${_linkage})
 
         add_executable(${_target} "${_test_src}")
 
-        message(STATUS "test_targets: include_dir='${_inc_dir}'")
         target_include_directories(${_target}
             PRIVATE
-                $<BUILD_INTERFACE:${_src_dir}/include>
+                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
                 $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         )
 
@@ -183,12 +161,10 @@ function(test_catch2_targets)
         message(FATAL_ERROR "test_catch2_targets: no primary module defined")
     endif()
 
-    meta_get(MODULE "${_primary}" lower       _lower)
-    meta_get(MODULE "${_primary}" src_dir     _src_dir)
-    meta_get(MODULE "${_primary}" include_dir _inc_dir)
     meta_get(MODULE "${_primary}" hpp_only    _hpp_only)
+    meta_get(MODULE "${_primary}" lower       _lower)
 
-    set(_tests_dir "${_src_dir}/tests")
+    set(_tests_dir "${CMAKE_SOURCE_DIR}/tests")
     if(NOT EXISTS "${_tests_dir}")
         message(STATUS "test_catch2_targets: disabled (no tests directory found)")
         return()
@@ -200,9 +176,7 @@ function(test_catch2_targets)
     if(NOT _hpp_only)
         message(STATUS "test_catch2_targets: library target properties before compilation:")
         dump_target_properties(${_lower}_shared)
-        if(NOT SLIM_USE_LOCAL_SOURCE)
-            dump_target_properties(${_lower}_static)
-        endif()
+        dump_target_properties(${_lower}_static)
     endif()
 
     include(FetchContent)
@@ -217,19 +191,15 @@ function(test_catch2_targets)
 
     add_executable(${_lower}_catch2_tests ${_test_sources})
 
-    message(STATUS "test_catch2_targets: include_dir='${_inc_dir}'")
     target_include_directories(${_lower}_catch2_tests
         PRIVATE
-            $<BUILD_INTERFACE:${_src_dir}/include>
+            $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     )
 
     if(NOT _hpp_only)
-        if(SLIM_USE_LOCAL_SOURCE)
-            target_link_libraries(${_lower}_catch2_tests PRIVATE ${_lower}_shared)
-        else()
-            target_link_libraries(${_lower}_catch2_tests PRIVATE ${_lower}_static)
-        endif()
+        target_link_libraries(${_lower}_catch2_tests PRIVATE ${_lower}_shared)
+        target_link_libraries(${_lower}_catch2_tests PRIVATE ${_lower}_static)
     endif()
 
     apply_slim_compile_options(${_lower}_catch2_tests)
