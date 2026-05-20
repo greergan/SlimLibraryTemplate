@@ -178,15 +178,7 @@ function(test_catch2_targets)
         dump_target_properties(${_lower}_shared)
         dump_target_properties(${_lower}_static)
     endif()
-
-    include(FetchContent)
-    FetchContent_Declare(
-        Catch2
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG v3.5.0
-    )
-    FetchContent_MakeAvailable(Catch2)
-
+    find_package(Catch2 3 REQUIRED)
     enable_testing()
 
     add_executable(${_lower}_catch2_tests ${_test_sources})
