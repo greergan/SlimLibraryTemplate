@@ -1,54 +1,118 @@
-# Overview
-This project provides a containerized build environment for generating Linux installation packages. The included Docker configuration installs the required toolchain to produce both Debian (`.deb`) and Red Hat (`.rpm`) packages.
+# Docker Dev Environment
 
-# Prerequisites
-- Docker
-- Visual Studio Code
-- VS Code Dev Containers extension
+Provides a containerized Ubuntu build environment for compiling and packaging Slim libraries. Produces both Debian (`.deb`) and Red Hat (`.rpm`) packages from a single consistent toolchain.
 
-# Build the Docker Image
-Use the provided [Dockerfile](Dockerfile) to build the image:
+---
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Visual Studio Code](https://code.visualstudio.com/) *(optional, for Dev Container)*
+- [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) *(optional)*
+
+---
+
+## Toolchain
+
+The image is based on `ubuntu:26.04` and includes:
+
+| Tool | Purpose |
+|---|---|
+| `build-essential` | GCC, make, and core build utilities |
+| `cmake` | Build system generator |
+| `ninja-build` | Fast build backend |
+| `catch2` | C++ unit testing framework |
+| `curl` | Git repo reachability checks at configure time |
+| `git` | Source fetching and tag resolution |
+| `libtool` / `libtool-bin` | Shared library tooling |
+| `openssh-client` | SSH-based Git access |
+| `pkg-config` | Dependency discovery for installed libraries |
+| `python3` / `pipx` | Runtime for pre-commit and tooling |
+| `rpm` | RPM package creation |
+| `pre-commit` | Git hook manager (installed globally via pipx) |
+
+---
+
+## Build the Image
+
+From the repository root:
+
+```bash
+docker build -t slim-toolchain docker/
+```
+
+Or from inside the `docker/` directory:
 
 ```bash
 docker build -t slim-toolchain .
 ```
 
-This image includes:
-- GNU build tools (autoconf, automake, libtool)
-- Compilers and build essentials
-- CMake and Ninja
-- Git and curl
-- RPM tooling
-- pkg-config
-- Locale configuration
+---
 
-# Usage
-Run the container and mount your workspace:
+## Run the Container
+
+Mount your workspace and drop into a shell:
 
 ```bash
 docker run --rm -it \
-  -v $(pwd):/workspace \
+  -v "$(pwd):/workspace" \
   -w /workspace \
   slim-toolchain
 ```
 
-You can now build Debian and Red Hat packages inside the container.
+From there, all standard `make` targets are available:
 
-# VS Code Dev Container
-A sample [devcontainer.json](devcontainer.json) is provided to simplify development in Visual Studio Code.
+```bash
+make build
+make deb
+make rpm
+make packages
+```
 
-## Steps
-1. Install the Dev Containers extension in VS Code.
-2. Open the project folder.
-3. When prompted, reopen the folder in a container.
+---
 
-Alternatively:
-- Open Command Palette
-- Select: `Dev Containers: Reopen in Container`
+## VS Code Dev Container
 
-The configuration mounts your workspace into the container and uses the prebuilt toolchain image.
+A `devcontainer.json` is included for a one-click development environment in VS Code.
 
-# Notes
-- The container is configured with UTF-8 locale support.
-- Package dependencies are preinstalled to minimize setup time.
-- The environment is consistent across Debian and Red Hat packaging workflows.
+### Setup
+
+1. Install the **Dev Containers** extension in VS Code.
+2. Open the repository root folder.
+3. When prompted, choose **Reopen in Container** — or open the Command Palette and run:
+   ```
+   Dev Containers: Reopen in Container
+   ```
+
+The container will build from the local `Dockerfile`, mount your workspace at `/workspace`, and install the extensions and settings below automatically.
+
+### Container Details
+
+| Setting | Value |
+|---|---|
+| Container name | `slim-toolchain-container` |
+| Workspace mount | `<localWorkspaceFolder>` → `/workspace` |
+| Timezone | `America/Los_Angeles` |
+| Git editor | VS Code (`code --wait`) |
+
+### Installed Extensions
+
+| Extension | Purpose |
+|---|---|
+| `GridFlowTech.document-tabs` | Tab management |
+| `ms-vscode.cmake-tools` | CMake configure, build, and debug integration |
+
+### Editor Settings
+
+| Setting | Value |
+|---|---|
+| Indentation | Tabs (not spaces) |
+| Tab size | 4 |
+| C++ standard | C++23 |
+| Minimap | Disabled |
+| Mouse wheel zoom | Enabled |
+| Hover delay | 1000 ms |
+| Tab completion | On |
+| Auto-closing tags | Enabled (HTML, JS, TS) |
+
+The Code Runner extension is configured to run `make install` from the workspace folder when executing a `.cpp` file directly.
