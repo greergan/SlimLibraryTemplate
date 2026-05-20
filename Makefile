@@ -2,8 +2,9 @@ BUILD_DIR := build
 INSTALL_PREFIX ?= /usr
 CMAKE := cmake
 DIST_DIR ?= .
-LOCAL_SRC ?= ON;
+LOCAL_SRC ?= ON
 RELEASE_TYPE ?= DEBUG
+SHARED_ONLY ?= ON
 
 IS_DEBIAN := $(shell test -f /etc/debian_version && echo "yes")
 IS_REDHAT := $(shell test -f /etc/redhat-release && echo "yes")
@@ -34,14 +35,15 @@ configure:
 		-DCMAKE_BUILD_TYPE=$(RELEASE_TYPE) \
 		-DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX) \
 		-DCPACK_OUTPUT_FILE_PREFIX=$(DIST_DIR) \
-		-DSLIM_USE_LOCAL_SOURCE=$(LOCAL_SRC)
+		-DSLIM_USE_LOCAL_SOURCE=$(LOCAL_SRC) \
+		-DSLIM_SHARED_ONLY=$(SHARED_ONLY)
 
 build: configure
-	$(CMAKE) --build $(BUILD_DIR) --target dist
+	$(CMAKE) --build $(BUILD_DIR)
 
 install:
 	@if [ "$(IS_DEBIAN)" = "yes" ]; then \
-		$(MAKE) LOCAL_SRC=OFF deb; \
+		$(MAKE) LOCAL_SRC=OFF SHARED_ONLY=OFF deb; \
 		PKG=$$(ls -1 dist/*.deb 2>/dev/null | sort -Vr | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
@@ -51,7 +53,7 @@ install:
 			exit 1; \
 		fi; \
 	elif [ "$(IS_REDHAT)" = "yes" ]; then \
-		$(MAKE) LOCAL_SRC=OFF rpm; \
+		$(MAKE) LOCAL_SRC=OFF SHARED_ONLY=OFF rpm; \
 		PKG=$$(ls -1 dist/*.rpm 2>/dev/null | sort -Vr | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
@@ -67,7 +69,7 @@ install:
 
 local:
 	@if [ "$(IS_DEBIAN)" = "yes" ]; then \
-		$(MAKE) LOCAL_SRC=ON deb; \
+		$(MAKE) LOCAL_SRC=ON SHARED_ONLY=OFF deb; \
 		PKG=$$(ls -1 dist/*0.0.0*.deb 2>/dev/null | sort -Vr | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
@@ -77,7 +79,7 @@ local:
 			exit 1; \
 		fi; \
 	elif [ "$(IS_REDHAT)" = "yes" ]; then \
-		$(MAKE) LOCAL_SRC=ON rpm; \
+		$(MAKE) LOCAL_SRC=ON SHARED_ONLY=OFF rpm; \
 		PKG=$$(ls -1 dist/*0.0.0*.rpm 2>/dev/null | sort -Vr | head -n 1); \
 		if [ -n "$$PKG" ]; then \
 			echo "Installing $$PKG"; \
@@ -92,10 +94,10 @@ local:
 	fi;
 
 deb: build
-	cd $(BUILD_DIR) && cpack -G DEB
+	cd $(BUILD_DIR) --target dist && cpack -G DEB
 
 rpm: build
-	cd $(BUILD_DIR) && cpack -G RPM
+	cd $(BUILD_DIR) --target dist && cpack -G RPM
 
 packages:
 	cd $(BUILD_DIR) && for f in DEB RPM; do cpack -G $$f; done
