@@ -1,7 +1,6 @@
 BUILD_DIR := build
 INSTALL_PREFIX ?= /usr
 CMAKE := cmake
-DIST_DIR ?= .
 LOCAL_SRC ?= ON
 RELEASE_TYPE ?= DEBUG
 SHARED_ONLY ?= ON
@@ -100,6 +99,8 @@ rpm: build
 	cd $(BUILD_DIR) --target dist && cpack -G RPM
 
 packages:
+	$(MAKE) LOCAL_SRC=OFF SHARED_ONLY=OFF configure
+	$(CMAKE) --build $(BUILD_DIR) --target dist
 	cd $(BUILD_DIR) && for f in DEB RPM; do cpack -G $$f; done
 
 clean:
