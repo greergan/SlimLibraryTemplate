@@ -98,7 +98,6 @@ Names that don't match one of these patterns are rejected at configure time with
 | `SLIM_SHARED_ONLY` | `ON` | Build only a shared library; `OFF` also builds a static archive |
 | `CMAKE_BUILD_TYPE` | `DEBUG` | `DEBUG`, `RELEASE`, or `COMPACT` |
 | `CMAKE_INSTALL_PREFIX` | `/usr` | Install root (overridden to `/usr` during packaging) |
-| `CPACK_OUTPUT_FILE_PREFIX` | `.` | Directory where `.deb` / `.rpm` files are written |
 
 ---
 
